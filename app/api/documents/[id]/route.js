@@ -1,74 +1,103 @@
-import { createClient } from '../../../../lib/supabase/server';
-import { NextResponse } from 'next/server';
+import { NextResponse } from "next/server";
+import { createClient } from "@/lib/supabase/server";
 
-// Next.js 15 requires awaiting dynamic route parameter variables
+export const dynamic = "force-dynamic";
+
+async function getUser(supabase) {
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser();
+  return error || !user ? null : user;
+}
+
+const unauthorized = () =>
+  NextResponse.json(
+    { error: "UNAUTHORIZED", message: "Unauthorized. Login required." },
+    { status: 401 }
+  );
+
+const notFound = () =>
+  NextResponse.json(
+    { error: "NOT_FOUND", message: "Document not found." },
+    { status: 404 }
+  );
+
+// GET /api/documents/:id  -> one document including its full text
 export async function GET(request, { params }) {
   try {
+    const { id } = await params; // params is a Promise in Next.js 15
     const supabase = await createClient();
-    const { id } = await params;
+    const user = await getUser(supabase);
+    if (!user) return unauthorized();
 
-    // 1. Authenticate user
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
-      return NextResponse.json({ error: 'UNAUTHORIZED', message: 'Login required.' }, { status: 401 });
-    }
-
-    // 2. Fetch the specific document row
-    const { data: doc, error: docError } = await supabase
-      .from('documents')
-      .select('*')
-      .eq('id', id)
-      .eq('user_id', user.id)
+    const { data: doc, error } = await supabase
+      .from("documents")
+      .select(
+        "id, document_type, research_topic, target_institution, generated_content, is_unlocked, created_at"
+      )
+      .eq("id", id)
+      .eq("user_id", user.id)
       .maybeSingle();
 
-    if (docError || !doc) {
-      return NextResponse.json({ error: 'NOT_FOUND', message: 'Document not found.' }, { status: 404 });
+    if (error) {
+      console.error("Document fetch error:", error);
+      return NextResponse.json(
+        { error: "DATABASE_ERROR", message: "Could not load the document." },
+        { status: 500 }
+      );
     }
+    if (!doc) return notFound();
 
-    // 3. Security Check: If document is locked, protect your IP by withholding full text
+    // Locked documents never leak their text.
     if (!doc.is_unlocked) {
       return NextResponse.json({
-        id: doc.id,
-        document_type: doc.document_type,
-        research_topic: doc.research_topic,
+        success: true,
+        document: { ...doc, generated_content: null },
         locked: true,
-        generated_content: "This asset is locked. Complete checkout payment parameter protocols to download."
       });
     }
 
-    return NextResponse.json({ success: true, data: doc });
-
+    return NextResponse.json({ success: true, document: doc, locked: false });
   } catch (error) {
-    console.error('Fetch individual asset fault:', error);
-    return NextResponse.json({ error: 'SERVER_FAULT' }, { status: 500 });
+    console.error("Document fetch server error:", error);
+    return NextResponse.json(
+      { error: "SERVER_FAULT", message: "Could not load the document." },
+      { status: 500 }
+    );
   }
 }
 
+// DELETE /api/documents/:id
 export async function DELETE(request, { params }) {
   try {
-    const supabase = await createClient();
     const { id } = await params;
+    const supabase = await createClient();
+    const user = await getUser(supabase);
+    if (!user) return unauthorized();
 
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
-      return NextResponse.json({ error: 'UNAUTHORIZED' }, { status: 401 });
-    }
-
-    // Explicitly runs the deletion routine filtering by asset ID and owner ID
-    const { error: deleteError } = await supabase
-      .from('documents')
+    const { data: deleted, error } = await supabase
+      .from("documents")
       .delete()
-      .eq('id', id)
-      .eq('user_id', user.id);
+      .eq("id", id)
+      .eq("user_id", user.id)
+      .select("id");
 
-    if (deleteError) {
-      return NextResponse.json({ error: 'DATABASE_ERROR', message: 'Deletion request dropped.' }, { status: 500 });
+    if (error) {
+      console.error("Document delete error:", error);
+      return NextResponse.json(
+        { error: "DATABASE_ERROR", message: "Could not delete the document." },
+        { status: 500 }
+      );
     }
+    if (!deleted || deleted.length === 0) return notFound();
 
-    return NextResponse.json({ success: true, message: 'Document deleted successfully.' });
-
+    return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('Delete asset exception path:', error);
-    return NextResponse.json({ error: 'SERVER_FAULT' }, { status: 500 });
+    console.error("Document delete server error:", error);
+    return NextResponse.json(
+      { error: "SERVER_FAULT", message: "Could not delete the document." },
+      { status: 500 }
+    );
   }
 }

@@ -1,18 +1,19 @@
-import { createClient } from '../../../lib/supabase/server';
-import { createClient as createServiceRoleClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 import { Anthropic } from '@anthropic-ai/sdk';
+import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
+
+// Long generations (especially dissertations) can exceed default serverless limits.
+// Raise this to match your hosting plan (value is in seconds).
+export const maxDuration = 300;
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
-export const maxDuration = 300; 
-
-// --- SECURITY AND CONSTANT BALANCING BOUNDS ---
-const MODEL_TAG = 'claude-sonnet-5-5';
-const MAX_TEXT_INPUT_BYTES = 150 * 1024; // 150 KB Safer max size (~22,000 words maximum per transaction)
-const COOLDOWN_WINDOW_SECONDS = 30;     // Forces an explicit 30-second wait between button clicks
+const MODEL = 'claude-sonnet-5-5';
+const MAX_TEXT_INPUT_BYTES = 150 * 1024; // 150 KB
+const COOLDOWN_SECONDS = 30;
 
 const MASTER_VOICE_PROFILE = `
 Rhythm: Use runs of plain declarative sentences of 5 to 12 words set between long accumulating sentences of 30 to 50 words built with coordination and participle tails (providing, easing, reducing). Few mid-length sentences. Never cap sentence length. Write dense paragraphs.
@@ -23,90 +24,154 @@ Diction I reach for: streamlined, instrumental, synergy, keep abreast, intricate
 Conventions: Capitalise formal posts and bodies. Serial comma in long lists. Spelling follows British conventions if none is stated. Fix typos, hyphenation and grammar silently.
 `;
 
+const VALID_ACTIONS = ['generate_proposal', 'simulate_data', 'compile_dissertation'];
+
 export async function POST(request) {
-  const supabase = await createClient();
-  
-  // 1. SECURE USER AUTHENTICATION CHECK
-  const { data: { user }, error: authError } = await supabase.auth.getUser();
-  if (authError || !user) {
-    return NextResponse.json({ error: 'UNAUTHORIZED', message: 'Valid login required.' }, { status: 401 });
+  // ---------- 1. Authenticate (getUser validates the token with Supabase Auth) ----------
+  let supabase;
+  let user;
+  try {
+    supabase = await createClient();
+    const { data, error: authError } = await supabase.auth.getUser();
+
+    if (authError || !data?.user) {
+      return NextResponse.json(
+        { error: 'UNAUTHORIZED', message: 'Unauthorized. Login required.' },
+        { status: 401 }
+      );
+    }
+    user = data.user;
+  } catch (error) {
+    console.error('Auth verification error:', error);
+    return NextResponse.json(
+      { error: 'AUTH_FAULT', message: 'Could not verify your session.' },
+      { status: 500 }
+    );
   }
   const userId = user.id;
 
   try {
-    // SECURITY CHECK A: Measure absolute raw payload size to protect server resources
-    const rawTextData = await request.text();
-    if (Buffer.byteLength(rawTextData, 'utf8') > MAX_TEXT_INPUT_BYTES) {
-      return NextResponse.json({ 
-        error: 'PAYLOAD_TOO_LARGE', 
-        message: 'File upload exceeds security bounds (150KB maximum). Compress your text inputs.' 
-      }, { status: 413 });
+    // ---------- 2. Parse and validate the request ----------
+    const rawBody = await request.text();
+    if (Buffer.byteLength(rawBody, 'utf8') > MAX_TEXT_INPUT_BYTES) {
+      return NextResponse.json(
+        {
+          error: 'PAYLOAD_TOO_LARGE',
+          message: `Your input is too large. Please keep the total under ${Math.round(MAX_TEXT_INPUT_BYTES / 1024)} KB.`,
+        },
+        { status: 413 }
+      );
     }
 
-    // Safely parse body after size clearance validation passes
-    const body = JSON.parse(rawTextData);
-    const { 
-      action_type,          
-      research_topic,       
-      target_institution,   
-      writing_sample,       
-      uploaded_proposal,    
-      uploaded_field_data   
+    let body;
+    try {
+      body = JSON.parse(rawBody);
+    } catch {
+      return NextResponse.json(
+        { error: 'BAD_REQUEST', message: 'Request body must be valid JSON.' },
+        { status: 400 }
+      );
+    }
+
+    const {
+      action_type,
+      research_topic,
+      target_institution,
+      writing_sample,
+      uploaded_proposal,
+      uploaded_field_data,
     } = body;
 
-    if (!action_type) {
-      return NextResponse.json({ error: 'BAD_REQUEST', message: 'Missing field: action_type is mandatory.' }, { status: 400 });
+    if (!VALID_ACTIONS.includes(action_type)) {
+      return NextResponse.json(
+        { error: 'BAD_REQUEST', message: `action_type must be one of: ${VALID_ACTIONS.join(', ')}.` },
+        { status: 400 }
+      );
     }
 
-    // SECURITY CHECK B: Rate Limiting Cooldown Check via Database History Logs
-    const thirtySecondsAgo = new Date(Date.now() - COOLDOWN_WINDOW_SECONDS * 1000).toISOString();
-    const { data: recentDocs, error: rateError } = await supabase
-      .from('documents')
-      .select('created_at')
-      .eq('user_id', userId)
-      .gt('created_at', thirtySecondsAgo)
-      .limit(1);
-
-    if (rateError) {
-      return NextResponse.json({ error: 'SERVER_FAULT', message: 'Rate calculation fault.' }, { status: 500 });
+    if (action_type === 'generate_proposal' && !research_topic?.trim()) {
+      return NextResponse.json(
+        { error: 'BAD_REQUEST', message: 'research_topic is required for generate_proposal.' },
+        { status: 400 }
+      );
     }
 
-    if (recentDocs && recentDocs.length > 0) {
-      return NextResponse.json({ 
-        error: 'RATE_LIMIT_EXCEEDED', 
-        message: `Please wait ${COOLDOWN_WINDOW_SECONDS} seconds between compilation requests to protect system balance.` 
-      }, { status: 429 });
+    if (
+      (action_type === 'simulate_data' || action_type === 'compile_dissertation') &&
+      !uploaded_proposal?.trim()
+    ) {
+      return NextResponse.json(
+        { error: 'BAD_REQUEST', message: 'uploaded_proposal is required for this action.' },
+        { status: 400 }
+      );
     }
 
-    // 2. FETCH SUBSCRIPTION CONDITIONS
+    if (action_type === 'compile_dissertation' && !uploaded_field_data?.trim()) {
+      return NextResponse.json(
+        { error: 'BAD_REQUEST', message: 'uploaded_field_data is required for compile_dissertation.' },
+        { status: 400 }
+      );
+    }
+
+    // ---------- 3. Load subscription (RLS scopes this to the signed-in user) ----------
     const { data: sub, error: subErr } = await supabase
       .from('subscriptions')
-      .select('tier, proposals_remaining, dissertations_remaining')
+      .select('tier, proposals_remaining, dissertations_remaining, data_simulations_remaining')
       .eq('user_id', userId)
       .single();
 
     if (subErr || !sub) {
-      return NextResponse.json({ error: 'DATABASE_ERROR', message: 'Could not resolve licensing profiles.' }, { status: 500 });
+      return NextResponse.json(
+        { error: 'DATABASE_ERROR', message: 'Could not verify user status.' },
+        { status: 500 }
+      );
     }
 
-    // 3. ENFORCE REVENUE TIERS AND ACCESS BLOCKS
+    // ---------- 4. Paywall checks ----------
+    const isEnterprise = sub.tier === 'consultant_enterprise';
+    const hasDataTier = sub.tier === 'data_suite' || isEnterprise;
+
     if (action_type === 'generate_proposal') {
-      if (sub.tier === 'free' && sub.proposals_remaining <= 0) {
+      if (!isEnterprise && sub.proposals_remaining <= 0) {
         return NextResponse.json({ error: 'PAYWALL_TRIGGERED', target: 'tier_1' }, { status: 403 });
       }
     } else if (action_type === 'simulate_data') {
-      if (sub.tier !== 'data_suite' && sub.tier !== 'consultant_enterprise') {
+      if (!hasDataTier && !(sub.data_simulations_remaining > 0)) {
         return NextResponse.json({ error: 'PAYWALL_TRIGGERED', target: 'tier_2_data' }, { status: 403 });
       }
     } else if (action_type === 'compile_dissertation') {
-      if (sub.tier !== 'consultant_enterprise' && sub.dissertations_remaining <= 0) {
+      if (!isEnterprise && sub.dissertations_remaining <= 0) {
         return NextResponse.json({ error: 'PAYWALL_TRIGGERED', target: 'tier_3_dissertation' }, { status: 403 });
       }
-    } else {
-      return NextResponse.json({ error: 'BAD_REQUEST', message: 'Invalid engine instruction context.' }, { status: 400 });
     }
 
-    // 4. PREPARE STYLISTIC DICTION CONSTRAINTS
+    // ---------- 4b. Cooldown between requests ----------
+    const { data: lastDoc, error: lastDocErr } = await supabase
+      .from('documents')
+      .select('created_at')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (lastDocErr) {
+      console.error('Cooldown check error:', lastDocErr);
+    } else if (lastDoc?.created_at) {
+      const secondsSince = (Date.now() - new Date(lastDoc.created_at).getTime()) / 1000;
+      if (secondsSince < COOLDOWN_SECONDS) {
+        const retryAfter = Math.ceil(COOLDOWN_SECONDS - secondsSince);
+        return NextResponse.json(
+          {
+            error: 'RATE_LIMITED',
+            message: `Please wait ${retryAfter} seconds before requesting another document.`,
+            retry_after: retryAfter,
+          },
+          { status: 429, headers: { 'Retry-After': String(retryAfter) } }
+        );
+      }
+    }
+
+    // ---------- 5. Voice style ----------
     let activeVoiceStyle = MASTER_VOICE_PROFILE;
     if (writing_sample && writing_sample.trim().length > 100) {
       activeVoiceStyle = `
@@ -118,7 +183,7 @@ export async function POST(request) {
       `;
     }
 
-    // 5. ASSEMBLE SYSTEM PROMPTS AND DEPLOY THE PROPRIETARY PLAYBOOKS
+    // ---------- 6. Build prompts ----------
     let systemPrompt = '';
     let userPrompt = '';
     let docTypeLabel = '';
@@ -136,13 +201,11 @@ export async function POST(request) {
         Target Institution: ${target_institution}
         Task: Autonomously write and export a complete, publication-grade Master's Research Proposal and associated Data Collection Tools structured precisely using the mandatory 12-Part Integrated Research Package format.
       `;
-
     } else if (action_type === 'simulate_data') {
       docTypeLabel = 'field_data';
       systemPrompt = `
         ROLE: You are a Lead Research Methodologist, Senior Qualitative Data Analyst, and Psychometrician specializing in empirical data simulation.
         OPERATIONAL LAWS: Automatically scan the provided research proposal content. Determine the maximum participant categories, sample size breakdowns, and target variables. Generate realistic numerical distributions and illustrative verbatim qualitative responses. Zero placeholders.
-        NOTICE: Explicitly label output structures as generated empirical research indicators.
       `;
       userPrompt = `
         Approved Research Proposal Input Content:
@@ -151,7 +214,6 @@ export async function POST(request) {
         ---
         Task: Read the text above, extract the methodology rules, and generate a full spectrum of contextually plausible empirical responses (fully generated qualitative verbatim grids and complete quantitative frequency datasets).
       `;
-
     } else if (action_type === 'compile_dissertation') {
       docTypeLabel = 'dissertation';
       systemPrompt = `
@@ -169,3 +231,77 @@ export async function POST(request) {
         ---
         ${uploaded_field_data}
         ---
+        Task: Write, structure, and compile a complete, publication-grade Master's Dissertation Report structured into standard 5-to-6 chapter postgraduate layouts including all statistical and narrative analyses.
+      `;
+    }
+
+    // ---------- 7. Call Claude ----------
+    const aiResponse = await anthropic.messages.create({
+      model: MODEL,
+      max_tokens: 8000,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: userPrompt }],
+    });
+
+    // content is an array of blocks, so collect the text blocks
+    const finalGeneratedContent = aiResponse.content
+      .filter((block) => block.type === 'text')
+      .map((block) => block.text)
+      .join('\n');
+
+    if (!finalGeneratedContent) {
+      return NextResponse.json(
+        { error: 'EMPTY_GENERATION', message: 'The model returned no content. Please try again.' },
+        { status: 502 }
+      );
+    }
+
+    // ---------- 8. Save the document ----------
+    const { error: insertErr } = await supabase.from('documents').insert({
+      user_id: userId,
+      document_type: docTypeLabel,
+      research_topic: research_topic || 'Extracted from Document Input',
+      target_institution: target_institution || 'Extracted Guidelines',
+      generated_content: finalGeneratedContent,
+      is_unlocked: true,
+    });
+
+    if (insertErr) {
+      console.error('Document save error:', insertErr);
+      return NextResponse.json(
+        { error: 'DATABASE_ERROR', message: 'Content was generated but could not be saved.' },
+        { status: 500 }
+      );
+    }
+
+    // ---------- 9. Decrement usage credits (service role, so users cannot edit their own balances) ----------
+    let creditUpdate = null;
+    if (action_type === 'generate_proposal' && !isEnterprise && sub.proposals_remaining > 0) {
+      creditUpdate = { proposals_remaining: sub.proposals_remaining - 1 };
+    } else if (action_type === 'compile_dissertation' && !isEnterprise && sub.dissertations_remaining > 0) {
+      creditUpdate = { dissertations_remaining: sub.dissertations_remaining - 1 };
+    } else if (action_type === 'simulate_data' && !hasDataTier && sub.data_simulations_remaining > 0) {
+      creditUpdate = { data_simulations_remaining: sub.data_simulations_remaining - 1 };
+    }
+
+    if (creditUpdate) {
+      const { error: creditErr } = await createAdminClient()
+        .from('subscriptions')
+        .update(creditUpdate)
+        .eq('user_id', userId);
+
+      if (creditErr) {
+        // Do not fail the request after a successful generation, but log it.
+        console.error('Credit decrement error:', creditErr);
+      }
+    }
+
+    return NextResponse.json({ success: true, payload: finalGeneratedContent });
+  } catch (error) {
+    console.error('Core Application Server Error:', error);
+    return NextResponse.json(
+      { error: 'SERVER_FAULT', message: 'Processing engine failure.' },
+      { status: 500 }
+    );
+  }
+}
