@@ -8,6 +8,7 @@ import {
   listDocuments,
   getDocument,
   deleteDocument,
+  unlockDocument,
   startCheckout,
   startCryptoCheckout,
   logout,
@@ -326,12 +327,90 @@ function PaywallModal({ target, onClose, onUnauthorized }) {
   );
 }
 
+function printText(title, text) {
+  const win = window.open("", "_blank");
+  if (!win) return false;
+  const esc = (v) => String(v).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  win.document.write(
+    `<!doctype html><html><head><title>${esc(title)}</title><style>body{font-family:Georgia,serif;line-height:1.6;max-width:760px;margin:40px auto;padding:0 20px;white-space:pre-wrap;color:#111}</style></head><body>${esc(text)}</body></html>`
+  );
+  win.document.close();
+  win.focus();
+  win.print();
+  return true;
+}
+
+// ---------------------------------------------------------------------------
+// Locked preview: the first pages are readable, the rest is behind an unlock button
+// ---------------------------------------------------------------------------
+function LockedPreview({ text, sections, totalWords, canUseCredit, unlocking, onUnlock, error }) {
+  const shownSections = (sections || []).slice(0, 12);
+  const extra = (sections || []).length - shownSections.length;
+
+  return (
+    <div>
+      <div className="relative overflow-hidden rounded-lg bg-white">
+        <div className="max-h-96 overflow-hidden whitespace-pre-wrap p-4 text-sm leading-relaxed text-slate-800">
+          {text}
+        </div>
+        <div
+          className="pointer-events-none absolute inset-x-0 bottom-0 h-32"
+          style={{ background: "linear-gradient(to top, #ffffff, rgba(255,255,255,0))" }}
+        />
+      </div>
+
+      <div className="mt-4 rounded-xl border border-indigo-200 bg-indigo-50 p-4">
+        <p className="text-sm font-semibold text-indigo-900">
+          This is a free preview{totalWords ? `. The full document is about ${totalWords.toLocaleString()} words.` : "."}
+        </p>
+        <p className="mt-1 text-xs text-indigo-800">
+          Unlock it to read everything, then copy, download or print the complete document.
+        </p>
+
+        {shownSections.length > 0 && (
+          <ul className="mt-3 space-y-1 text-sm text-slate-700">
+            {shownSections.map((title) => (
+              <li key={title} className="flex items-start gap-2">
+                <span aria-hidden="true">🔒</span>
+                <span>{title}</span>
+              </li>
+            ))}
+            {extra > 0 && <li className="text-xs text-slate-500">and {extra} more sections</li>}
+          </ul>
+        )}
+
+        {error && (
+          <p role="alert" className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+            {error}
+          </p>
+        )}
+
+        <button
+          type="button"
+          onClick={onUnlock}
+          disabled={unlocking}
+          className="mt-4 w-full rounded-lg bg-indigo-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {unlocking
+            ? "Unlocking..."
+            : canUseCredit
+            ? "Unlock the full proposal (uses 1 proposal credit)"
+            : "Unlock the full proposal"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Document viewer modal
 // ---------------------------------------------------------------------------
-function DocumentModal({ docId, onClose, onUnauthorized }) {
+function DocumentModal({ docId, onClose, onUnauthorized, onChanged, onPaywall, canUseCredit }) {
   const [doc, setDoc] = useState(null);
   const [locked, setLocked] = useState(false);
+  const [lockedMeta, setLockedMeta] = useState({ sections: [], totalWords: null });
+  const [unlocking, setUnlocking] = useState(false);
+  const [unlockError, setUnlockError] = useState("");
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
 
@@ -345,6 +424,7 @@ function DocumentModal({ docId, onClose, onUnauthorized }) {
         if (!active) return;
         setDoc(res.document);
         setLocked(Boolean(res.locked));
+        setLockedMeta({ sections: res.locked_sections || [], totalWords: res.total_words || null });
       } catch (err) {
         if (!active) return;
         if (isUnauthorized(err)) onUnauthorized();
@@ -355,6 +435,28 @@ function DocumentModal({ docId, onClose, onUnauthorized }) {
       active = false;
     };
   }, [docId, onUnauthorized]);
+
+  async function unlock() {
+    if (unlocking) return;
+    if (!canUseCredit) {
+      onPaywall?.();
+      return;
+    }
+    setUnlocking(true);
+    setUnlockError("");
+    try {
+      const res = await unlockDocument(docId);
+      setDoc(res.document);
+      setLocked(false);
+      onChanged?.();
+    } catch (err) {
+      if (isUnauthorized(err)) onUnauthorized();
+      else if (isPaywall(err)) onPaywall?.();
+      else setUnlockError(err.message || "Could not unlock the document.");
+    } finally {
+      setUnlocking(false);
+    }
+  }
 
   async function copyText() {
     try {
@@ -395,7 +497,15 @@ function DocumentModal({ docId, onClose, onUnauthorized }) {
           {error && <p className="text-sm text-red-700">{error}</p>}
           {!doc && !error && <p className="text-sm text-slate-500">Loading...</p>}
           {doc && locked && (
-            <p className="text-sm text-slate-700">This document is locked. Unlock it to read the full text.</p>
+            <LockedPreview
+              text={doc.generated_content}
+              sections={lockedMeta.sections}
+              totalWords={lockedMeta.totalWords}
+              canUseCredit={canUseCredit}
+              unlocking={unlocking}
+              onUnlock={unlock}
+              error={unlockError}
+            />
           )}
           {doc && !locked && (
             <div className="whitespace-pre-wrap text-sm leading-relaxed text-slate-800">
@@ -421,6 +531,13 @@ function DocumentModal({ docId, onClose, onUnauthorized }) {
               className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
             >
               Download .txt
+            </button>
+            <button
+              type="button"
+              onClick={() => printText(doc.research_topic || "Document", doc.generated_content)}
+              className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            >
+              Print
             </button>
           </div>
         )}
@@ -456,6 +573,8 @@ export default function DashboardPage() {
   const [genError, setGenError] = useState("");
   const [result, setResult] = useState(null);
   const [resultCopied, setResultCopied] = useState(false);
+  const [unlocking, setUnlocking] = useState(false);
+  const [unlockError, setUnlockError] = useState("");
 
   // Overlays and banners
   const [paywall, setPaywall] = useState(null); // { target } or null
@@ -526,7 +645,7 @@ export default function DashboardPage() {
         const latest = status?.recent_transactions?.[0];
         if (latest && String(latest.status).toLowerCase() === "successful") {
           if (!cancelled) {
-            setBanner({ kind: "success", text: "Payment confirmed. Your credits have been updated." });
+            setBanner({ kind: "success", text: "Payment confirmed. Your credits have been updated. Open a locked document in the list below and press Unlock." });
             window.history.replaceState(null, "", window.location.pathname);
           }
           return;
@@ -594,8 +713,16 @@ export default function DashboardPage() {
 
     setGenerating(true);
     try {
-      const text = await generateDocument(payload);
-      setResult({ text, label: current.label });
+      const data = await generateDocument(payload);
+      setResult({
+        label: current.label,
+        locked: Boolean(data.locked),
+        text: data.locked ? data.preview : data.payload,
+        documentId: data.document_id,
+        sections: data.locked_sections || [],
+        totalWords: data.total_words || null,
+      });
+      setUnlockError("");
       refreshBilling();
       if (page !== 1) setPage(1);
       else refreshDocs(1, typeFilter);
@@ -645,9 +772,39 @@ export default function DashboardPage() {
     }
   }
 
+  async function handleUnlockResult() {
+    if (!result?.documentId || unlocking) return;
+    if (billing && !hasProposalCredit) {
+      setPaywall({ target: "tier_1" });
+      return;
+    }
+    setUnlocking(true);
+    setUnlockError("");
+    try {
+      const res = await unlockDocument(result.documentId);
+      setResult((r) => ({ ...r, locked: false, text: res.document.generated_content, sections: [] }));
+      refreshBilling();
+      refreshDocs(page, typeFilter);
+    } catch (err) {
+      if (isUnauthorized(err)) goToLogin();
+      else if (isPaywall(err)) setPaywall({ target: err.data?.target || "tier_1" });
+      else setUnlockError(err.message || "Could not unlock the document.");
+    } finally {
+      setUnlocking(false);
+    }
+  }
+
   const currentAction = ACTIONS.find((a) => a.value === action);
   const plan = billing?.plan;
   const credits = billing?.credits;
+  const hasProposalCredit = Boolean(
+    credits && (credits.proposals.unlimited || credits.proposals.remaining > 0)
+  );
+  const previewOnly =
+    action === "generate_proposal" &&
+    Boolean(credits) &&
+    !hasProposalCredit &&
+    (credits.free_previews_remaining ?? 0) > 0;
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -832,35 +989,69 @@ export default function DashboardPage() {
                   ? "Generating... this can take a minute or two"
                   : billing?.can_generate?.[action] === false
                   ? "Unlock to generate"
+                  : previewOnly
+                  ? "Generate free preview"
                   : `Generate ${currentAction.label}`}
               </button>
             </form>
 
             {result && (
-              <div className="mt-6 rounded-xl border border-emerald-200 bg-emerald-50/50 p-4">
+              <div
+                className={`mt-6 rounded-xl border p-4 ${
+                  result.locked ? "border-indigo-200 bg-indigo-50/40" : "border-emerald-200 bg-emerald-50/50"
+                }`}
+              >
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <h3 className="text-sm font-semibold text-slate-900">{result.label} ready</h3>
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={copyResult}
-                      className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
-                    >
-                      {resultCopied ? "Copied" : "Copy"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => downloadText(`${fileSlug(topic || result.label)}.txt`, result.text)}
-                      className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-700"
-                    >
-                      Download .txt
-                    </button>
+                  <h3 className="text-sm font-semibold text-slate-900">
+                    {result.locked ? `${result.label} preview` : `${result.label} ready`}
+                  </h3>
+                  {!result.locked && (
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={copyResult}
+                        className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                      >
+                        {resultCopied ? "Copied" : "Copy"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => downloadText(`${fileSlug(topic || result.label)}.txt`, result.text)}
+                        className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-700"
+                      >
+                        Download .txt
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => printText(topic || result.label, result.text)}
+                        className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                      >
+                        Print
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {result.locked ? (
+                  <div className="mt-3">
+                    <LockedPreview
+                      text={result.text}
+                      sections={result.sections}
+                      totalWords={result.totalWords}
+                      canUseCredit={hasProposalCredit}
+                      unlocking={unlocking}
+                      onUnlock={handleUnlockResult}
+                      error={unlockError}
+                    />
                   </div>
-                </div>
-                <p className="mt-1 text-xs text-slate-600">A copy has been saved to your history below.</p>
-                <div className="mt-3 max-h-96 overflow-y-auto whitespace-pre-wrap rounded-lg bg-white p-4 text-sm leading-relaxed text-slate-800">
-                  {result.text}
-                </div>
+                ) : (
+                  <>
+                    <p className="mt-1 text-xs text-slate-600">A copy has been saved to your history below.</p>
+                    <div className="mt-3 max-h-96 overflow-y-auto whitespace-pre-wrap rounded-lg bg-white p-4 text-sm leading-relaxed text-slate-800">
+                      {result.text}
+                    </div>
+                  </>
+                )}
               </div>
             )}
           </section>
@@ -903,6 +1094,12 @@ export default function DashboardPage() {
                     note={credits.data_simulations.included_in_plan ? "Included in your plan." : "Single purchases appear here."}
                   />
                 </div>
+
+                {credits.free_previews_remaining > 0 && (
+                  <p className="mt-5 rounded-lg bg-indigo-50 px-3 py-2 text-xs text-indigo-800">
+                    Free previews left: {credits.free_previews_remaining}. A preview shows the first few pages of a proposal.
+                  </p>
+                )}
 
                 <button
                   type="button"
@@ -957,6 +1154,11 @@ export default function DashboardPage() {
                       <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-700">
                         {DOC_TYPE_LABELS[doc.document_type] || doc.document_type}
                       </span>
+                      {doc.is_unlocked === false && (
+                        <span className="ml-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
+                          Locked
+                        </span>
+                      )}
                     </td>
                     <td className="max-w-[12rem] truncate py-3 pr-4 text-slate-600">{doc.target_institution}</td>
                     <td className="whitespace-nowrap py-3 pr-4 text-slate-600">{formatDate(doc.created_at)}</td>
@@ -966,7 +1168,7 @@ export default function DashboardPage() {
                         onClick={() => setViewDocId(doc.id)}
                         className="rounded-md px-2 py-1 text-xs font-medium text-indigo-600 hover:bg-indigo-50"
                       >
-                        View
+                        {doc.is_unlocked === false ? "Preview" : "View"}
                       </button>
                       <button
                         type="button"
@@ -1021,7 +1223,20 @@ export default function DashboardPage() {
         <PaywallModal target={paywall.target} onClose={() => setPaywall(null)} onUnauthorized={goToLogin} />
       )}
       {viewDocId && (
-        <DocumentModal docId={viewDocId} onClose={() => setViewDocId(null)} onUnauthorized={goToLogin} />
+        <DocumentModal
+          docId={viewDocId}
+          onClose={() => setViewDocId(null)}
+          onUnauthorized={goToLogin}
+          onChanged={() => {
+            refreshBilling();
+            refreshDocs(page, typeFilter);
+          }}
+          onPaywall={() => {
+            setViewDocId(null);
+            setPaywall({ target: "tier_1" });
+          }}
+          canUseCredit={hasProposalCredit}
+        />
       )}
     </div>
   );

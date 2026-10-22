@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { Anthropic } from '@anthropic-ai/sdk';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { buildPreview, FREE_PREVIEW_LIMIT } from '@/lib/documents/preview';
 
 // Long generations (especially dissertations) can exceed default serverless limits.
 // Raise this to match your hosting plan (value is in seconds).
@@ -116,7 +117,7 @@ export async function POST(request) {
     // ---------- 3. Load subscription (RLS scopes this to the signed-in user) ----------
     const { data: sub, error: subErr } = await supabase
       .from('subscriptions')
-      .select('tier, proposals_remaining, dissertations_remaining, data_simulations_remaining')
+      .select('tier, proposals_remaining, dissertations_remaining, data_simulations_remaining, free_previews_used')
       .eq('user_id', userId)
       .single();
 
@@ -131,9 +132,22 @@ export async function POST(request) {
     const isEnterprise = sub.tier === 'consultant_enterprise';
     const hasDataTier = sub.tier === 'data_suite' || isEnterprise;
 
+    // Proposals: with no credits left, a user gets a limited number of free PREVIEWS
+    // (a few pages shown, the rest locked until they unlock it).
+    let previewMode = false;
     if (action_type === 'generate_proposal') {
       if (!isEnterprise && sub.proposals_remaining <= 0) {
-        return NextResponse.json({ error: 'PAYWALL_TRIGGERED', target: 'tier_1' }, { status: 403 });
+        if ((sub.free_previews_used ?? 0) >= FREE_PREVIEW_LIMIT) {
+          return NextResponse.json(
+            {
+              error: 'PAYWALL_TRIGGERED',
+              target: 'tier_1',
+              message: 'You have used your free previews. Buy a proposal or subscribe to continue.',
+            },
+            { status: 403 }
+          );
+        }
+        previewMode = true;
       }
     } else if (action_type === 'simulate_data') {
       if (!hasDataTier && !(sub.data_simulations_remaining > 0)) {
@@ -257,14 +271,72 @@ export async function POST(request) {
     }
 
     // ---------- 8. Save the document ----------
-    const { error: insertErr } = await supabase.from('documents').insert({
+    const admin = createAdminClient();
+    const baseRow = {
       user_id: userId,
       document_type: docTypeLabel,
       research_topic: research_topic || 'Extracted from Document Input',
       target_institution: target_institution || 'Extracted Guidelines',
-      generated_content: finalGeneratedContent,
-      is_unlocked: true,
-    });
+    };
+
+    // ----- Free preview: the user sees a few pages, the full text stays on the server -----
+    if (previewMode) {
+      const { previewText, previewWords, totalWords, lockedSections } = buildPreview(finalGeneratedContent);
+
+      // The saved document only holds the preview while it is locked.
+      const { data: savedPreview, error: previewSaveErr } = await supabase
+        .from('documents')
+        .insert({ ...baseRow, generated_content: previewText, is_unlocked: false })
+        .select('id')
+        .single();
+
+      if (previewSaveErr || !savedPreview) {
+        console.error('Preview save error:', previewSaveErr);
+        return NextResponse.json(
+          { error: 'DATABASE_ERROR', message: 'Your preview was generated but could not be saved.' },
+          { status: 500 }
+        );
+      }
+
+      // The full text goes in a table users cannot read directly.
+      const { error: secretErr } = await admin
+        .from('document_secrets')
+        .insert({ document_id: String(savedPreview.id), content: finalGeneratedContent });
+
+      if (secretErr) {
+        console.error('Locked content save error:', secretErr);
+        await admin.from('documents').delete().eq('id', savedPreview.id);
+        return NextResponse.json(
+          { error: 'DATABASE_ERROR', message: 'Your preview could not be saved. Please try again.' },
+          { status: 500 }
+        );
+      }
+
+      const previewsUsed = (sub.free_previews_used ?? 0) + 1;
+      const { error: usedErr } = await admin
+        .from('subscriptions')
+        .update({ free_previews_used: previewsUsed })
+        .eq('user_id', userId);
+      if (usedErr) console.error('Preview counter error:', usedErr);
+
+      return NextResponse.json({
+        success: true,
+        locked: true,
+        document_id: savedPreview.id,
+        preview: previewText,
+        preview_words: previewWords,
+        total_words: totalWords,
+        locked_sections: lockedSections,
+        free_previews_remaining: Math.max(0, FREE_PREVIEW_LIMIT - previewsUsed),
+      });
+    }
+
+    // ----- Normal generation: full document, credit spent -----
+    const { data: saved, error: insertErr } = await supabase
+      .from('documents')
+      .insert({ ...baseRow, generated_content: finalGeneratedContent, is_unlocked: true })
+      .select('id')
+      .single();
 
     if (insertErr) {
       console.error('Document save error:', insertErr);
@@ -285,7 +357,7 @@ export async function POST(request) {
     }
 
     if (creditUpdate) {
-      const { error: creditErr } = await createAdminClient()
+      const { error: creditErr } = await admin
         .from('subscriptions')
         .update(creditUpdate)
         .eq('user_id', userId);
@@ -296,7 +368,12 @@ export async function POST(request) {
       }
     }
 
-    return NextResponse.json({ success: true, payload: finalGeneratedContent });
+    return NextResponse.json({
+      success: true,
+      locked: false,
+      document_id: saved?.id ?? null,
+      payload: finalGeneratedContent,
+    });
   } catch (error) {
     console.error('Core Application Server Error:', error);
     return NextResponse.json(

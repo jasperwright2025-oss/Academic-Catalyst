@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { PRODUCTS } from "@/lib/payments/catalog";
+import { FREE_PREVIEW_LIMIT } from "@/lib/documents/preview";
 
 export const dynamic = "force-dynamic";
 
@@ -34,7 +35,7 @@ export async function GET() {
     const { data: sub, error: subErr } = await supabase
       .from("subscriptions")
       .select(
-        "tier, proposals_remaining, dissertations_remaining, data_simulations_remaining"
+        "tier, proposals_remaining, dissertations_remaining, data_simulations_remaining, free_previews_used"
       )
       .eq("user_id", user.id)
       .maybeSingle();
@@ -52,6 +53,7 @@ export async function GET() {
     const proposals = sub?.proposals_remaining ?? 0;
     const dissertations = sub?.dissertations_remaining ?? 0;
     const simulations = sub?.data_simulations_remaining ?? 0;
+    const previewsRemaining = Math.max(0, FREE_PREVIEW_LIMIT - (sub?.free_previews_used ?? 0));
 
     const isEnterprise = tier === "consultant_enterprise";
     const hasDataSuite = tier === "data_suite" || isEnterprise;
@@ -94,9 +96,10 @@ export async function GET() {
             remaining: simulations,
             included_in_plan: hasDataSuite,
           },
+          free_previews_remaining: previewsRemaining,
         },
         can_generate: {
-          generate_proposal: isEnterprise || proposals > 0,
+          generate_proposal: isEnterprise || proposals > 0 || previewsRemaining > 0,
           simulate_data: hasDataSuite || simulations > 0,
           compile_dissertation: isEnterprise || dissertations > 0,
         },

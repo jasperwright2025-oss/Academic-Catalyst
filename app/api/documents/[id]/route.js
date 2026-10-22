@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { buildPreview } from "@/lib/documents/preview";
 
 export const dynamic = "force-dynamic";
 
@@ -23,7 +25,8 @@ const notFound = () =>
     { status: 404 }
   );
 
-// GET /api/documents/:id  -> one document including its full text
+// GET /api/documents/:id
+// Unlocked: the full text. Locked: only the saved preview plus the titles of the locked sections.
 export async function GET(request, { params }) {
   try {
     const { id } = await params; // params is a Promise in Next.js 15
@@ -49,16 +52,35 @@ export async function GET(request, { params }) {
     }
     if (!doc) return notFound();
 
-    // Locked documents never leak their text.
-    if (!doc.is_unlocked) {
-      return NextResponse.json({
-        success: true,
-        document: { ...doc, generated_content: null },
-        locked: true,
-      });
+    if (doc.is_unlocked) {
+      return NextResponse.json({ success: true, document: doc, locked: false });
     }
 
-    return NextResponse.json({ success: true, document: doc, locked: false });
+    // Locked: generated_content only holds the preview. Add the list of locked section titles.
+    let lockedSections = [];
+    let totalWords = null;
+    try {
+      const { data: secret } = await createAdminClient()
+        .from("document_secrets")
+        .select("content")
+        .eq("document_id", String(doc.id))
+        .maybeSingle();
+      if (secret?.content) {
+        const meta = buildPreview(secret.content);
+        lockedSections = meta.lockedSections;
+        totalWords = meta.totalWords;
+      }
+    } catch (metaErr) {
+      console.error("Locked section lookup error:", metaErr);
+    }
+
+    return NextResponse.json({
+      success: true,
+      document: doc,
+      locked: true,
+      locked_sections: lockedSections,
+      total_words: totalWords,
+    });
   } catch (error) {
     console.error("Document fetch server error:", error);
     return NextResponse.json(
@@ -91,6 +113,13 @@ export async function DELETE(request, { params }) {
       );
     }
     if (!deleted || deleted.length === 0) return notFound();
+
+    // Remove any locked full text that belonged to it (best effort).
+    try {
+      await createAdminClient().from("document_secrets").delete().eq("document_id", String(id));
+    } catch (cleanupErr) {
+      console.error("Locked content cleanup error:", cleanupErr);
+    }
 
     return NextResponse.json({ success: true });
   } catch (error) {
