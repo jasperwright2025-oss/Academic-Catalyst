@@ -28,13 +28,13 @@ const ACTIONS = [
   {
     value: "generate_proposal",
     label: "Research Proposal",
-    description: "A complete 12-part integrated research package.",
+    description: "A full First-Class proposal with literature review, methodology, ethics, timeline, references and ready-to-use data tools.",
     paywall: "tier_1",
   },
   {
     value: "simulate_data",
     label: "Data Simulation",
-    description: "Plausible illustrative datasets built from your approved proposal.",
+    description: "A 12-part package of clearly labelled simulated data and analysis, built from your approved proposal.",
     paywall: "tier_2_data",
   },
   {
@@ -950,8 +950,7 @@ export default function DashboardPage() {
 
               {action === "simulate_data" && (
                 <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                  Simulated data is synthetic. Use it for illustration, pilots and teaching, and never present it as
-                  real field data.
+                  Disclaimer: the data generated here is simulated. It is for pilots, instrument testing and teaching. The participants are not real.
                 </p>
               )}
 
@@ -1097,7 +1096,7 @@ export default function DashboardPage() {
 
                 {credits.free_previews_remaining > 0 && (
                   <p className="mt-5 rounded-lg bg-indigo-50 px-3 py-2 text-xs text-indigo-800">
-                    Free previews left: {credits.free_previews_remaining}. A preview shows the first few pages of a proposal.
+                    {credits.free_previews_remaining} free {credits.free_previews_remaining === 1 ? "preview" : "previews"} left. A preview shows the first few pages of a proposal.
                   </p>
                 )}
 
