@@ -10,7 +10,11 @@ import {
   deleteDocument,
   unlockDocument,
   startCheckout,
-  startCryptoCheckout,
+  startUsdtPayment,
+  getUsdtPaymentStatus,
+  startMomoPayment,
+  submitMomoTransaction,
+  getMomoPaymentStatus,
   verifyPesapalPayment,
   logout,
   isUnauthorized,
@@ -154,29 +158,449 @@ function CreditGauge({ label, remaining, max, unlimited, unlimitedLabel = "Unlim
 }
 
 // ---------------------------------------------------------------------------
+// Direct USDT payment: shows the address and the exact amount, then waits for the transfer
+// ---------------------------------------------------------------------------
+function UsdtPaymentPanel({ order, onPaid, onBack, onClose, onUnauthorized }) {
+  const [state, setState] = useState("waiting"); // waiting | expired | failed
+  const [checking, setChecking] = useState(false);
+  const [copied, setCopied] = useState("");
+  const [secondsLeft, setSecondsLeft] = useState(() =>
+    Math.max(0, Math.round((new Date(order.expires_at).getTime() - Date.now()) / 1000))
+  );
+
+  useEscape(onClose);
+
+  // Counts down the time left for this order.
+  useEffect(() => {
+    const timer = setInterval(() => setSecondsLeft((s) => Math.max(0, s - 1)), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // Checks for the payment every few seconds until it arrives.
+  useEffect(() => {
+    let active = true;
+    let timer;
+    const poll = async () => {
+      try {
+        const res = await getUsdtPaymentStatus(order.tx_ref);
+        if (!active) return;
+        if (res.state === "paid") {
+          onPaid();
+          return;
+        }
+        if (res.state === "expired" || res.state === "failed") {
+          setState(res.state);
+          return;
+        }
+      } catch (err) {
+        if (!active) return;
+        if (isUnauthorized(err)) {
+          onUnauthorized();
+          return;
+        }
+      }
+      timer = setTimeout(poll, 8000);
+    };
+    timer = setTimeout(poll, 4000);
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [order.tx_ref]);
+
+  async function checkNow() {
+    if (checking) return;
+    setChecking(true);
+    try {
+      const res = await getUsdtPaymentStatus(order.tx_ref);
+      if (res.state === "paid") onPaid();
+      else if (res.state === "expired" || res.state === "failed") setState(res.state);
+    } catch (err) {
+      if (isUnauthorized(err)) onUnauthorized();
+    } finally {
+      setChecking(false);
+    }
+  }
+
+  async function copy(label, value) {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(label);
+      setTimeout(() => setCopied(""), 2000);
+    } catch {
+      // The value is on screen, so it can still be copied by hand.
+    }
+  }
+
+  const minutes = Math.floor(secondsLeft / 60);
+  const seconds = String(secondsLeft % 60).padStart(2, "0");
+
+  const row = (label, value, copyKey) => (
+    <div className="rounded-lg border border-slate-200 p-3">
+      <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</p>
+      <div className="mt-1 flex items-center justify-between gap-3">
+        <p className="break-all font-mono text-sm font-semibold text-slate-900">{value}</p>
+        {copyKey && (
+          <button
+            type="button"
+            onClick={() => copy(copyKey, value)}
+            className="shrink-0 rounded-md border border-slate-300 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+          >
+            {copied === copyKey ? "Copied" : "Copy"}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/50 sm:items-center sm:p-4" onClick={onClose}>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="usdt-title"
+        className="max-h-[92vh] w-full overflow-y-auto rounded-t-2xl bg-white p-6 shadow-2xl sm:max-w-lg sm:rounded-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 id="usdt-title" className="text-xl font-semibold text-slate-900">
+              Pay {order.amount} USDT
+            </h2>
+            <p className="mt-1 text-sm text-slate-600">{order.product?.name}</p>
+          </div>
+          <button type="button" onClick={onClose} aria-label="Close" className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100">
+            ✕
+          </button>
+        </div>
+
+        <div className="mt-5 space-y-3">
+          {row("Network", "TRON (TRC20)", null)}
+          {row("Send to this address", order.address, "address")}
+          {row("Exact amount (USDT)", order.amount, "amount")}
+        </div>
+
+        <p className="mt-4 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">
+          Send exactly {order.amount} USDT on the TRON (TRC20) network. Your payment is recognised by this exact
+          amount. Any other network (such as BEP20 or ERC20) or a different amount will not be recognised, and money
+          sent that way cannot be recovered. If you pay from an exchange, add its withdrawal fee on top so that
+          exactly {order.amount} USDT arrives.
+        </p>
+
+        <div aria-live="polite" className="mt-4">
+          {state === "waiting" && (
+            <div className="rounded-lg bg-indigo-50 px-3 py-3 text-sm text-indigo-900">
+              <p className="font-semibold">Waiting for your payment...</p>
+              <p className="mt-1 text-xs">
+                This page checks automatically and unlocks your credits as soon as the transfer is confirmed, usually
+                within a few minutes. Time left for this order: {minutes}:{seconds}.
+              </p>
+            </div>
+          )}
+          {state !== "waiting" && (
+            <p role="alert" className="rounded-lg bg-red-50 px-3 py-3 text-sm text-red-700">
+              {state === "expired"
+                ? "This order has expired. If you already sent the payment, contact support and include your transaction ID. Otherwise, go back and start a new order."
+                : "This order could not be completed. Please go back and start a new order."}
+            </p>
+          )}
+        </div>
+
+        <div className="mt-5 flex flex-wrap justify-end gap-2">
+          <button
+            type="button"
+            onClick={onBack}
+            className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          >
+            Back to options
+          </button>
+          {state === "waiting" && (
+            <button
+              type="button"
+              onClick={checkNow}
+              disabled={checking}
+              className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {checking ? "Checking..." : "I have paid, check now"}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Mobile money (MTN or Airtel): send the amount, then enter the transaction ID
+// ---------------------------------------------------------------------------
+function MomoPaymentPanel({ product, onPaid, onBack, onClose, onUnauthorized }) {
+  const [order, setOrder] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [txId, setTxId] = useState("");
+  const [submitted, setSubmitted] = useState(false);
+  const [state, setState] = useState("awaiting_review"); // awaiting_review | rejected | failed
+  const [copied, setCopied] = useState("");
+
+  useEscape(onClose);
+
+  async function choose(network) {
+    if (busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      setOrder(await startMomoPayment(product.key, network));
+    } catch (err) {
+      if (isUnauthorized(err)) {
+        onUnauthorized();
+        return;
+      }
+      setError(err.message || "Could not start the payment. Please try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function submit(event) {
+    event.preventDefault();
+    if (busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      await submitMomoTransaction(order.tx_ref, txId.trim());
+      setSubmitted(true);
+    } catch (err) {
+      if (isUnauthorized(err)) {
+        onUnauthorized();
+        return;
+      }
+      setError(err.message || "Could not submit the transaction ID. Please try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // After the transaction ID is sent, wait for the owner to approve it.
+  useEffect(() => {
+    if (!submitted || !order) return;
+    let active = true;
+    let timer;
+    const poll = async () => {
+      try {
+        const res = await getMomoPaymentStatus(order.tx_ref);
+        if (!active) return;
+        if (res.state === "paid") {
+          onPaid();
+          return;
+        }
+        if (res.state === "rejected" || res.state === "failed") {
+          setState(res.state);
+          return;
+        }
+      } catch (err) {
+        if (!active) return;
+        if (isUnauthorized(err)) {
+          onUnauthorized();
+          return;
+        }
+      }
+      timer = setTimeout(poll, 15000);
+    };
+    timer = setTimeout(poll, 15000);
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [submitted, order?.tx_ref]);
+
+  async function copy(label, value) {
+    try {
+      await navigator.clipboard.writeText(String(value));
+      setCopied(label);
+      setTimeout(() => setCopied(""), 2000);
+    } catch {
+      // The value is on screen, so it can still be copied by hand.
+    }
+  }
+
+  const networkLabel = order?.network === "mtn" ? "MTN Mobile Money" : "Airtel Money";
+  const amountText = order ? Number(order.amount_ugx).toLocaleString("en-US") : "";
+
+  const row = (label, value, copyKey) => (
+    <div className="rounded-lg border border-slate-200 p-3">
+      <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</p>
+      <div className="mt-1 flex items-center justify-between gap-3">
+        <p className="break-all text-sm font-semibold text-slate-900">{value}</p>
+        {copyKey && (
+          <button
+            type="button"
+            onClick={() => copy(copyKey, copyKey === "amount" ? order.amount_ugx : value)}
+            className="shrink-0 rounded-md border border-slate-300 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+          >
+            {copied === copyKey ? "Copied" : "Copy"}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/50 sm:items-center sm:p-4" onClick={onClose}>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="momo-title"
+        className="max-h-[92vh] w-full overflow-y-auto rounded-t-2xl bg-white p-6 shadow-2xl sm:max-w-lg sm:rounded-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 id="momo-title" className="text-xl font-semibold text-slate-900">
+              Pay with mobile money
+            </h2>
+            <p className="mt-1 text-sm text-slate-600">{product.name}</p>
+          </div>
+          <button type="button" onClick={onClose} aria-label="Close" className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100">
+            ✕
+          </button>
+        </div>
+
+        {/* Step 1: choose the network */}
+        {!order && (
+          <div className="mt-5">
+            <p className="text-sm font-medium text-slate-700">Which network will you pay from?</p>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              {[
+                ["mtn", "MTN Mobile Money"],
+                ["airtel", "Airtel Money"],
+              ].map(([id, label]) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => choose(id)}
+                  disabled={busy}
+                  className="rounded-xl border border-slate-200 p-4 text-left text-sm font-semibold text-slate-900 transition hover:border-indigo-400 hover:bg-indigo-50 disabled:opacity-60"
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Step 2: send the money and enter the transaction ID */}
+        {order && !submitted && (
+          <form onSubmit={submit} className="mt-5 space-y-3">
+            <p className="text-sm text-slate-700">
+              Open {networkLabel} on your phone and send exactly the amount below to this number.
+            </p>
+            {row("Send to", order.name ? `${order.number} (${order.name})` : order.number, "number")}
+            {row("Exact amount (UGX)", amountText, "amount")}
+            {row("Reference (type it in the reason or note box if your phone asks)", order.reference, "reference")}
+
+            <div>
+              <label htmlFor="momo_txid" className="block text-sm font-medium text-slate-700">
+                Transaction ID from your confirmation message
+              </label>
+              <input
+                id="momo_txid"
+                type="text"
+                value={txId}
+                onChange={(e) => setTxId(e.target.value)}
+                disabled={busy}
+                autoComplete="off"
+                className={fieldClass}
+              />
+            </div>
+
+            {error && (
+              <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+                {error}
+              </p>
+            )}
+
+            <button
+              type="submit"
+              disabled={busy || !txId.trim()}
+              className="w-full rounded-lg bg-indigo-600 px-4 py-3 text-sm font-semibold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {busy ? "Submitting..." : "I have paid, submit transaction ID"}
+            </button>
+          </form>
+        )}
+
+        {/* Step 3: waiting for approval */}
+        {order && submitted && (
+          <div aria-live="polite" className="mt-5">
+            {state === "awaiting_review" ? (
+              <div className="rounded-lg bg-indigo-50 px-3 py-3 text-sm text-indigo-900">
+                <p className="font-semibold">Thank you. We are confirming your payment.</p>
+                <p className="mt-1 text-xs">
+                  Mobile money payments are confirmed by a person, so this can take some time. You can close this window.
+                  Your credits appear on your dashboard as soon as the payment is approved.
+                </p>
+              </div>
+            ) : (
+              <p role="alert" className="rounded-lg bg-red-50 px-3 py-3 text-sm text-red-700">
+                We could not confirm this payment. If you did send the money, please contact support and include your
+                transaction ID.
+              </p>
+            )}
+          </div>
+        )}
+
+        {error && !order && (
+          <p role="alert" className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+            {error}
+          </p>
+        )}
+
+        <div className="mt-5 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={submitted ? onClose : onBack}
+            className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          >
+            {submitted ? "Close" : "Back to options"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Paywall modal (tabs: pay once / monthly plans; methods: cards + mobile money, crypto)
 // ---------------------------------------------------------------------------
-function PaywallModal({ target, onClose, onUnauthorized }) {
+function PaywallModal({ target, onClose, onUnauthorized, onPaid }) {
   const offer = target ? PAYWALL_OFFERS[target] : null;
   const highlighted = offer ? [offer.single, offer.subscription] : [];
 
   const [tab, setTab] = useState("once");
-  const [method, setMethod] = useState("flutterwave");
+  const [method, setMethod] = useState("card");
   const [busyKey, setBusyKey] = useState(null);
   const [error, setError] = useState("");
+  const [usdtOrder, setUsdtOrder] = useState(null);
+  const [momoProduct, setMomoProduct] = useState(null);
 
   useEscape(onClose);
 
-  // Crypto is one-time only: recurring billing needs a card.
-  const effectiveMethod = tab === "monthly" ? "flutterwave" : method;
+  const effectiveMethod = method;
 
   async function pay(product) {
     if (busyKey) return;
     setError("");
     setBusyKey(product.key);
     try {
-      if (effectiveMethod === "crypto") {
-        await startCryptoCheckout(product.key);
+      if (effectiveMethod === "momo") {
+        setMomoProduct(product);
+        setBusyKey(null);
+      } else if (effectiveMethod === "crypto") {
+        const order = await startUsdtPayment(product.key);
+        setUsdtOrder({ ...order, product });
+        setBusyKey(null);
       } else {
         await startCheckout(product.key);
       }
@@ -208,6 +632,30 @@ function PaywallModal({ target, onClose, onUnauthorized }) {
       <span className="mt-0.5 block text-xs text-slate-600">{detail}</span>
     </button>
   );
+
+  if (momoProduct) {
+    return (
+      <MomoPaymentPanel
+        product={momoProduct}
+        onPaid={onPaid}
+        onBack={() => setMomoProduct(null)}
+        onClose={onClose}
+        onUnauthorized={onUnauthorized}
+      />
+    );
+  }
+
+  if (usdtOrder) {
+    return (
+      <UsdtPaymentPanel
+        order={usdtOrder}
+        onPaid={onPaid}
+        onBack={() => setUsdtOrder(null)}
+        onClose={onClose}
+        onUnauthorized={onUnauthorized}
+      />
+    );
+  }
 
   return (
     <div
@@ -262,18 +710,14 @@ function PaywallModal({ target, onClose, onUnauthorized }) {
         </div>
 
         {/* Payment method */}
-        <div role="radiogroup" aria-label="Payment method" className="mt-4 grid gap-3 sm:grid-cols-2">
-          {methodTile("flutterwave", "Cards and mobile money", "Visa, Mastercard and mobile money wallets, paid in USD or your local currency.", false)}
-          {methodTile(
-            "crypto",
-            "Crypto (USDT)",
-            tab === "monthly" ? "Available for one-time purchases only." : "Pay with USDT through Binance Pay.",
-            tab === "monthly"
-          )}
+        <div role="radiogroup" aria-label="Payment method" className="mt-4 grid gap-3 sm:grid-cols-3">
+          {methodTile("card", "Card", "Visa and Mastercard, paid in US dollars.", false)}
+          {methodTile("momo", "MTN or Airtel Mobile Money", "Send to our number, then confirm with your transaction ID.", false)}
+          {methodTile("crypto", "Crypto (USDT)", "Send USDT on the TRON (TRC20) network. Confirmed automatically.", false)}
         </div>
         {tab === "monthly" && (
           <p className="mt-2 text-xs text-slate-500">
-            Monthly plans are paid by card. Choose automatic renewal on the payment page, or pay again each month.
+            Card payers can choose automatic renewal on the payment page. Otherwise, pay again each month. Each payment keeps the plan active for one month.
           </p>
         )}
 
@@ -321,7 +765,7 @@ function PaywallModal({ target, onClose, onUnauthorized }) {
         </div>
 
         <p className="mt-4 text-xs text-slate-500">
-          Prices are in USD. You will be taken to a secure hosted payment page and returned here afterwards.
+          Prices are in USD. Cards open a secure hosted payment page. Mobile money is paid in Uganda shillings and confirmed by us. USDT payments are confirmed on the blockchain.
         </p>
       </div>
     </div>
@@ -1230,7 +1674,20 @@ export default function DashboardPage() {
       </main>
 
       {paywall && (
-        <PaywallModal target={paywall.target} onClose={() => setPaywall(null)} onUnauthorized={goToLogin} />
+        <PaywallModal
+          target={paywall.target}
+          onClose={() => setPaywall(null)}
+          onUnauthorized={goToLogin}
+          onPaid={() => {
+            setPaywall(null);
+            setBanner({
+              kind: "success",
+              text: "Payment confirmed. Your credits have been updated. Open a locked document in the list below and press Unlock.",
+            });
+            refreshBilling();
+            refreshDocs(page, typeFilter);
+          }}
+        />
       )}
       {viewDocId && (
         <DocumentModal
