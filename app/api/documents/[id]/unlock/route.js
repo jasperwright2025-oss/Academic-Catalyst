@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { normalizeSubscription } from "@/lib/payments/plan";
 
 export const dynamic = "force-dynamic";
 
@@ -59,7 +60,7 @@ export async function POST(request, { params }) {
     const admin = createAdminClient();
     const { data: sub, error: subErr } = await admin
       .from("subscriptions")
-      .select("tier, proposals_remaining")
+      .select("tier, proposals_remaining, plan_expires_at")
       .eq("user_id", user.id)
       .maybeSingle();
 
@@ -71,6 +72,7 @@ export async function POST(request, { params }) {
       );
     }
 
+    Object.assign(sub, normalizeSubscription(sub));
     const isEnterprise = sub.tier === "consultant_enterprise";
     const creditsBefore = sub.proposals_remaining ?? 0;
 

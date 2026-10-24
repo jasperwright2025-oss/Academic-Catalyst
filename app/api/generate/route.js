@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { buildPreview, FREE_PREVIEW_LIMIT } from '@/lib/documents/preview';
 import { MASTER_VOICE_PROFILE } from '@/lib/prompts/voiceProfile';
+import { normalizeSubscription } from '@/lib/payments/plan';
 import { buildResearchSystemPrompt, buildResearchUserPrompt } from '@/lib/prompts/researchPlaybook';
 import { buildDataSystemPrompt, buildDataUserPrompt } from '@/lib/prompts/dataPlaybook';
 import { buildDissertationSystemPrompt, buildDissertationUserPrompt } from '@/lib/prompts/dissertationPlaybook';
@@ -179,7 +180,7 @@ export async function POST(request) {
     // ---------- 3. Load subscription (RLS scopes this to the signed-in user) ----------
     const { data: sub, error: subErr } = await supabase
       .from('subscriptions')
-      .select('tier, proposals_remaining, dissertations_remaining, data_simulations_remaining, free_previews_used')
+      .select('tier, proposals_remaining, dissertations_remaining, data_simulations_remaining, free_previews_used, plan_expires_at')
       .eq('user_id', userId)
       .single();
 
@@ -189,6 +190,9 @@ export async function POST(request) {
         { status: 500 }
       );
     }
+
+    // A paid plan whose period has run out counts as free.
+    Object.assign(sub, normalizeSubscription(sub));
 
     // ---------- 4. Paywall checks ----------
     const isEnterprise = sub.tier === 'consultant_enterprise';

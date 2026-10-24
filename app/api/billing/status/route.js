@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { PRODUCTS } from "@/lib/payments/catalog";
 import { FREE_PREVIEW_LIMIT } from "@/lib/documents/preview";
+import { effectiveTier, normalizeSubscription } from "@/lib/payments/plan";
 
 export const dynamic = "force-dynamic";
 
@@ -35,7 +36,7 @@ export async function GET() {
     const { data: sub, error: subErr } = await supabase
       .from("subscriptions")
       .select(
-        "tier, proposals_remaining, dissertations_remaining, data_simulations_remaining, free_previews_used"
+        "tier, proposals_remaining, dissertations_remaining, data_simulations_remaining, free_previews_used, plan_expires_at"
       )
       .eq("user_id", user.id)
       .maybeSingle();
@@ -49,8 +50,8 @@ export async function GET() {
     }
 
     // A user with no row yet is treated as free with no credits.
-    const tier = sub?.tier ?? "free";
-    const proposals = sub?.proposals_remaining ?? 0;
+    const tier = effectiveTier(sub);
+    const proposals = normalizeSubscription(sub).proposals_remaining;
     const dissertations = sub?.dissertations_remaining ?? 0;
     const simulations = sub?.data_simulations_remaining ?? 0;
     const previewsRemaining = Math.max(0, FREE_PREVIEW_LIMIT - (sub?.free_previews_used ?? 0));
@@ -88,6 +89,7 @@ export async function GET() {
               : (planProduct?.label ?? tier).replace(/ \(monthly\)$/, ""),
           is_subscribed: tier !== "free",
           monthly_price_usd: planProduct?.amount ?? 0,
+          expires_at: tier === "free" ? null : sub?.plan_expires_at ?? null,
         },
         credits: {
           proposals: { remaining: proposals, unlimited: isEnterprise },

@@ -11,6 +11,7 @@ import {
   unlockDocument,
   startCheckout,
   startCryptoCheckout,
+  verifyPesapalPayment,
   logout,
   isUnauthorized,
   isPaywall,
@@ -266,13 +267,13 @@ function PaywallModal({ target, onClose, onUnauthorized }) {
           {methodTile(
             "crypto",
             "Crypto (USDT)",
-            tab === "monthly" ? "Available for one-time purchases only." : "Pay with USDT through a hosted checkout.",
+            tab === "monthly" ? "Available for one-time purchases only." : "Pay with USDT through Binance Pay.",
             tab === "monthly"
           )}
         </div>
         {tab === "monthly" && (
           <p className="mt-2 text-xs text-slate-500">
-            Monthly plans renew automatically and are paid by card.
+            Monthly plans are paid by card. Choose automatic renewal on the payment page, or pay again each month.
           </p>
         )}
 
@@ -628,9 +629,12 @@ export default function DashboardPage() {
   // Returning from the payment page: /dashboard?payment=callback&status=...
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get("payment") !== "callback") return;
+    const trackingId = params.get("OrderTrackingId"); // added by Pesapal when the customer returns
+    const isReturn = params.get("payment") === "callback" || Boolean(trackingId);
+    const isCancelled = params.get("payment") === "cancelled" || params.get("status") === "cancelled";
+    if (!isReturn && !isCancelled) return;
 
-    if (params.get("status") === "cancelled") {
+    if (isCancelled) {
       setBanner({ kind: "warning", text: "The payment was cancelled. You have not been charged." });
       window.history.replaceState(null, "", window.location.pathname);
       return;
@@ -640,6 +644,13 @@ export default function DashboardPage() {
     setBanner({ kind: "info", text: "Confirming your payment..." });
 
     (async () => {
+      if (trackingId) {
+        try {
+          await verifyPesapalPayment(trackingId);
+        } catch {
+          // The notification from Pesapal may still arrive; keep checking below.
+        }
+      }
       for (let i = 0; i < 10 && !cancelled; i++) {
         const status = await refreshBilling();
         const latest = status?.recent_transactions?.[0];

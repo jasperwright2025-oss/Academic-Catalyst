@@ -1,96 +1,114 @@
-import { adminSupabase } from '../../../../../lib/supabase/admin';
-import { NextResponse } from 'next/server';
+import { NextResponse } from "next/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { PRODUCTS } from "@/lib/payments/catalog";
+import { applyGrants } from "@/lib/payments/grants";
+import { verifyWebhook, queryOrder } from "@/lib/payments/binance";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+// Binance expects this exact reply, otherwise it sends the notification again (up to 6 times).
+const OK = () => NextResponse.json({ returnCode: "SUCCESS", returnMessage: null });
+const RETRY = () => NextResponse.json({ returnCode: "FAIL", returnMessage: "retry" }, { status: 500 });
 
 export async function POST(request) {
+  // Raw text first: the signature covers the exact bytes received.
+  const rawBody = await request.text();
+
+  let signatureOk = false;
   try {
-    // 1. VERIFY WEBHOOK AUTHENTICITY USING SECRET SIGNATURE HEADERS
-    const signature = request.headers.get('bvnk-webhook-signature');
-    if (!signature || signature !== process.env.CRYPTO_WEBHOOK_HASH) {
-      return NextResponse.json({ error: 'UNAUTHORIZED_WEBHOOK' }, { status: 401 });
+    signatureOk = await verifyWebhook(request.headers, rawBody);
+  } catch (error) {
+    console.error("Binance webhook signature check could not run:", error);
+    return RETRY();
+  }
+  if (!signatureOk) {
+    return NextResponse.json({ error: "INVALID_SIGNATURE" }, { status: 401 });
+  }
+
+  let event;
+  let data;
+  try {
+    event = JSON.parse(rawBody);
+    data = typeof event.data === "string" ? JSON.parse(event.data) : event.data;
+  } catch {
+    return NextResponse.json({ error: "BAD_REQUEST" }, { status: 400 });
+  }
+
+  // Only order notifications matter here.
+  if (event?.bizType !== "PAY" || !data?.merchantTradeNo) return OK();
+  const merchantTradeNo = String(data.merchantTradeNo);
+
+  try {
+    const admin = createAdminClient();
+
+    // Unpaid, closed or expired order: record it and stop.
+    if (event.bizStatus !== "PAY_SUCCESS") {
+      await admin
+        .from("transactions")
+        .update({ status: "failed" })
+        .eq("tx_ref", merchantTradeNo)
+        .eq("provider", "binance")
+        .eq("status", "pending");
+      return OK();
     }
 
-    const payload = await request.json();
-    
-    // Only proceed if transaction status has reached definitive success
-    if (payload.status !== 'SUCCESS' && payload.status !== 'PAID') {
-      return NextResponse.json({ received: true, status: 'ignored' });
+    // ---------- 1. Never rely on the notification alone: ask Binance for the order ----------
+    const order = await queryOrder(merchantTradeNo);
+    if (String(order?.status).toUpperCase() !== "PAID") {
+      console.warn("Binance order not paid when queried:", merchantTradeNo, order?.status);
+      return RETRY();
     }
 
-    // EXTRACT TRACKING VARIABLES FROM WEBHOOK METADATA
-    const { userId, itemPurchased, trackingTier } = payload.metaData || {};
-    const transactionReference = payload.id || payload.reference;
-    const paymentAmount = payload.amount;
-
-    if (!userId || !itemPurchased || !transactionReference) {
-      return NextResponse.json({ error: 'DATA_MISMATCH', message: 'Missing tracing parameters.' }, { status: 400 });
-    }
-
-    // 2. CLAUDE'S CRITICAL DUPLICATE DELIVERY SAFETIE GATES
-    // Check if this payment has already been logged and processed in our database
-    const { data: existingTx } = await adminSupabase
-      .from('transactions')
-      .select('id')
-      .eq('gateway_reference', transactionReference)
+    // ---------- 2. Match it to the order we created ----------
+    const { data: row, error: lookupErr } = await admin
+      .from("transactions")
+      .select("tx_ref, user_id, product_key, amount, currency, status")
+      .eq("tx_ref", merchantTradeNo)
+      .eq("provider", "binance")
       .maybeSingle();
 
-    if (existingTx) {
-      // If found, immediately stop processing and return a friendly success status code. This stops duplicate credit duplication!
-      return NextResponse.json({ received: true, message: 'Duplicate transaction ignored safely.' });
+    if (lookupErr) throw lookupErr;
+    if (!row) {
+      console.warn("Binance payment with no matching order, review manually:", merchantTradeNo);
+      return OK();
+    }
+    if (row.status === "successful") return OK();
+
+    const paidAmount = Number(data.totalFee);
+    if (String(data.currency).toUpperCase() !== row.currency || !(paidAmount + 0.000001 >= Number(row.amount))) {
+      console.error("Binance payment mismatch, flagged for review:", merchantTradeNo, data.totalFee, data.currency);
+      await admin.from("transactions").update({ status: "flagged" }).eq("tx_ref", merchantTradeNo);
+      return OK();
     }
 
-    // 3. MUTATION PASS A: LOG HISTORICAL TRANSACTION TO ACCOUNT PROFILE
-    const { error: txError } = await adminSupabase
-      .from('transactions')
-      .insert({
-        user_id: userId,
-        payment_gateway: 'bvnk_crypto',
-        gateway_reference: transactionReference,
-        amount_usd: paymentAmount,
-        item_purchased: itemPurchased,
-        status: 'completed'
-      });
-
-    if (txError) {
-      console.error('Database logging failure:', txError);
-      return NextResponse.json({ error: 'LOGGING_FAULT' }, { status: 500 });
+    const product = PRODUCTS[row.product_key];
+    if (!product) {
+      console.error("Unknown product on transaction:", row.product_key, merchantTradeNo);
+      return OK();
     }
 
-    // 4. MUTATION PASS B: ALLOCATE PRICING MATRIX CREDITS AND UPGRADE SUBSCRIPTION
-    if (itemPurchased === 'single_proposal') {
-      // Uses our secured RPC function to increment credit
-      await adminSupabase.rpc('increment_proposal_credit', { target_user_id: userId });
-      
-    } else if (itemPurchased === 'subscription_plan' && trackingTier !== 'none') {
-      
-      let proposalAllotment = 0;
-      let dissertationAllotment = 0;
+    // ---------- 3. Claim it so repeated notifications cannot grant credits twice ----------
+    const { data: claimed, error: claimErr } = await admin
+      .from("transactions")
+      .update({ status: "successful", paid_at: new Date().toISOString() })
+      .eq("tx_ref", merchantTradeNo)
+      .in("status", ["pending", "failed"])
+      .select("tx_ref");
 
-      if (trackingTier === 'proposal_architect') {
-        proposalAllotment = 5;
-      } else if (trackingTier === 'data_suite') {
-        proposalAllotment = 5;
-      } else if (trackingTier === 'consultant_enterprise') {
-        proposalAllotment = 9999; // Unlimited for agencies
-        dissertationAllotment = 3;
-      }
+    if (claimErr) throw claimErr;
+    if (!claimed || claimed.length === 0) return OK();
 
-      await adminSupabase
-        .from('subscriptions')
-        .update({
-          tier: trackingTier,
-          status: 'active',
-          proposals_remaining: proposalAllotment,
-          dissertations_remaining: dissertationAllotment,
-          current_period_start: new Date().toISOString(),
-          current_period_end: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
-        })
-        .eq('user_id', userId);
+    // ---------- 4. Grant the credits ----------
+    const granted = await applyGrants(admin, row.user_id, product);
+    if (!granted) {
+      await admin.from("transactions").update({ status: "pending" }).eq("tx_ref", merchantTradeNo);
+      return RETRY();
     }
 
-    return NextResponse.json({ received: true, provisioned: true });
-
+    return OK();
   } catch (error) {
-    console.error('Crypto Webhook Execution Exception:', error);
-    return NextResponse.json({ error: 'SERVER_FAULT' }, { status: 500 });
+    console.error("Binance webhook error:", error);
+    return RETRY();
   }
 }
