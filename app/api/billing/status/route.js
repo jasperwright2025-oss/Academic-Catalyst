@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { PRODUCTS } from "@/lib/payments/catalog";
 import { FREE_PREVIEW_LIMIT } from "@/lib/documents/preview";
 import { effectiveTier, normalizeSubscription } from "@/lib/payments/plan";
+import { isAdminUser } from "@/lib/admin";
 
 export const dynamic = "force-dynamic";
 
@@ -81,6 +82,7 @@ export async function GET() {
     return NextResponse.json(
       {
         success: true,
+        is_admin: isAdminUser(user),
         plan: {
           tier,
           name:

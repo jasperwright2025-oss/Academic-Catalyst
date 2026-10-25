@@ -26,6 +26,10 @@ import {
 // ---------------------------------------------------------------------------
 // Configuration
 // ---------------------------------------------------------------------------
+// Card payments (Pesapal) stay hidden until you are approved.
+// To show them: in Vercel add NEXT_PUBLIC_SHOW_CARD_PAYMENTS = true, then redeploy.
+const SHOW_CARD_PAYMENTS = process.env.NEXT_PUBLIC_SHOW_CARD_PAYMENTS === "true";
+
 const PAGE_SIZE = 10;
 const MAX_INPUT_BYTES = 150 * 1024; // keep in step with the limit in /api/generate
 
@@ -579,7 +583,7 @@ function PaywallModal({ target, onClose, onUnauthorized, onPaid }) {
   const highlighted = offer ? [offer.single, offer.subscription] : [];
 
   const [tab, setTab] = useState("once");
-  const [method, setMethod] = useState("card");
+  const [method, setMethod] = useState(SHOW_CARD_PAYMENTS ? "card" : "momo");
   const [busyKey, setBusyKey] = useState(null);
   const [error, setError] = useState("");
   const [usdtOrder, setUsdtOrder] = useState(null);
@@ -710,14 +714,16 @@ function PaywallModal({ target, onClose, onUnauthorized, onPaid }) {
         </div>
 
         {/* Payment method */}
-        <div role="radiogroup" aria-label="Payment method" className="mt-4 grid gap-3 sm:grid-cols-3">
-          {methodTile("card", "Card", "Visa and Mastercard, paid in US dollars.", false)}
+        <div role="radiogroup" aria-label="Payment method" className={`mt-4 grid gap-3 ${SHOW_CARD_PAYMENTS ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
+          {SHOW_CARD_PAYMENTS && methodTile("card", "Card", "Visa and Mastercard, paid in US dollars.", false)}
           {methodTile("momo", "MTN or Airtel Mobile Money", "Send to our number, then confirm with your transaction ID.", false)}
           {methodTile("crypto", "Crypto (USDT)", "Send USDT on the TRON (TRC20) network. Confirmed automatically.", false)}
         </div>
         {tab === "monthly" && (
           <p className="mt-2 text-xs text-slate-500">
-            Card payers can choose automatic renewal on the payment page. Otherwise, pay again each month. Each payment keeps the plan active for one month.
+            {SHOW_CARD_PAYMENTS
+              ? "Card payers can choose automatic renewal on the payment page. Otherwise, pay again each month. Each payment keeps the plan active for one month."
+              : "Each payment keeps the plan active for one month. Pay again each month to renew."}
           </p>
         )}
 
@@ -765,7 +771,9 @@ function PaywallModal({ target, onClose, onUnauthorized, onPaid }) {
         </div>
 
         <p className="mt-4 text-xs text-slate-500">
-          Prices are in USD. Cards open a secure hosted payment page. Mobile money is paid in Uganda shillings and confirmed by us. USDT payments are confirmed on the blockchain.
+          {SHOW_CARD_PAYMENTS
+            ? "Prices are in USD. Cards open a secure hosted payment page. Mobile money is paid in Uganda shillings and confirmed by us. USDT payments are confirmed on the blockchain."
+            : "Prices are in USD. Mobile money is paid in Uganda shillings and confirmed by us. USDT payments are confirmed on the blockchain."}
         </p>
       </div>
     </div>
@@ -1284,6 +1292,14 @@ export default function DashboardPage() {
             >
               Buy credits
             </button>
+            {billing?.is_admin && (
+              <a
+                href="/admin/payments"
+                className="rounded-lg border border-emerald-300 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-800 hover:bg-emerald-100"
+              >
+                Approve payments
+              </a>
+            )}
             <button
               type="button"
               onClick={handleLogout}
