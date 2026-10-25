@@ -1,192 +1,281 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import Link from 'next/link';
-import { register, login } from '../../lib/api/client';
+import { useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { register, login } from "@/lib/api/client";
+import { PENDING_COVER_KEY } from "@/components/CoverDetailsPanel";
+
+const MIN_PASSWORD_LENGTH = 8;
 
 export default function RegisterPage() {
   const router = useRouter();
-  const [formData, setFormData] = useState({
-    fullName: '',
-    email: '',
-    password: '',
-    confirmPassword: '',
+  const [fullName, setFullName] = useState("");
+  const [position, setPosition] = useState("");
+  const [affiliation, setAffiliation] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [error, setError] = useState("");
+  const [accountCreated, setAccountCreated] = useState(false);
+  const [agreed, setAgreed] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+
+  function validate() {
+    if (!fullName.trim()) return "Please enter your full name.";
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      return "Please enter a valid email address.";
+    }
+    if (password.length < MIN_PASSWORD_LENGTH) {
+      return `Your password must be at least ${MIN_PASSWORD_LENGTH} characters long.`;
+    }
+    if (password !== confirmPassword) return "The two passwords do not match.";
+    if (!agreed) return "Please confirm that you accept the Terms of Service and the Privacy Policy to continue.";
+    return "";
+  }
+
+  const coverDetails = () => ({
+    full_name: fullName.trim(),
+    position: position.trim(),
+    affiliation: affiliation.trim(),
   });
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [emailConfirmationRequired, setEmailConfirmationRequired] = useState(false);
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError('');
-    setLoading(true);
-
-    const { fullName, email, password, confirmPassword } = formData;
-
-    // --- FRONTEND VALIDATION CHECKS ---
-    if (!fullName.trim() || !email.trim() || !password || !confirmPassword) {
-      setError('All fields are required.');
-      setLoading(false);
-      return;
-    }
-
-    if (password.length < 8) {
-      setError('Password must be at least 8 characters long.');
-      setLoading(false);
-      return;
-    }
-
-    if (password !== confirmPassword) {
-      setError('Passwords do not match.');
-      setLoading(false);
-      return;
-    }
-
+  // Saves the cover page details to the account (best effort, never blocks sign up).
+  async function saveCoverDetails() {
     try {
-      // 1. Dispatch registration request payload to our backend auth route
+      await fetch("/api/profile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(coverDetails()),
+      });
+    } catch {
+      // The dashboard lets the customer add them later.
+    }
+  }
+
+  async function handleSubmit(event) {
+    event.preventDefault();
+    if (submitting) return;
+    setError("");
+
+    const validationError = validate();
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+
+    const cleanEmail = email.trim();
+    setSubmitting(true);
+
+    // 1. Create the account
+    try {
       await register({
-        email: email.trim(),
+        email: cleanEmail,
         password,
         full_name: fullName.trim(),
       });
-
-      try {
-        // 2. Attempt immediate automatic sign-in for seamless onboarding
-        await login({ email: email.trim(), password });
-        router.push('/dashboard');
-        router.refresh();
-      } catch (loginErr) {
-        // If auto-login fails, it usually means Supabase requires email validation activation links
-        setEmailConfirmationRequired(true);
-      }
     } catch (err) {
-      setError(err.message || 'An error occurred during registration.');
-    } finally {
-      setLoading(false);
+      setError(err.message || "We could not create your account. Please try again.");
+      setSubmitting(false);
+      return;
     }
-  };
 
-  if (emailConfirmationRequired) {
+    // 2. Sign in straight away. This fails if the project requires email
+    //    confirmation first, in which case we show a message instead.
+    try {
+      await login({ email: cleanEmail, password });
+      await saveCoverDetails();
+      router.push("/dashboard");
+      router.refresh();
+    } catch {
+      // Not signed in yet (email confirmation), so keep the details for the first visit to the dashboard.
+      try {
+        localStorage.setItem(PENDING_COVER_KEY, JSON.stringify(coverDetails()));
+      } catch {
+        // ignore
+      }
+      setAccountCreated(true);
+      setSubmitting(false);
+    }
+  }
+
+  if (accountCreated) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-900 px-4 py-12 font-sans text-slate-100">
-        <div className="w-full max-w-md space-y-6 text-center bg-slate-800 p-8 rounded-xl shadow-xl border border-slate-700">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-amber-500/10 text-amber-500">
-            ✉️
-          </div>
-          <h2 className="text-2xl font-bold tracking-tight text-white">Account Created!</h2>
-          <p className="text-sm text-slate-400">
-            We have sent an authentication link to <span className="text-slate-200 font-medium">{formData.email}</span>. 
-            Kindly check your inbox and confirm your email address, then proceed to log in.
+      <main className="flex min-h-screen items-center justify-center bg-slate-50 px-4 py-12">
+        <div className="w-full max-w-md rounded-2xl bg-white p-8 text-center shadow-lg">
+          <h1 className="text-2xl font-semibold text-slate-900">Your account is ready</h1>
+          <p className="mt-3 text-sm text-slate-600">
+            If email confirmation is required, please check your inbox and confirm your
+            address first. Then you can sign in.
           </p>
-          <div className="pt-2">
-            <Link href="/login" className="text-sm font-semibold text-amber-500 hover:text-amber-400 transition-colors">
-              Return to Login Page &rarr;
-            </Link>
-          </div>
+          <Link
+            href="/login"
+            className="mt-6 inline-block w-full rounded-lg bg-indigo-600 px-4 py-2.5 font-medium text-white transition hover:bg-indigo-700"
+          >
+            Go to sign in
+          </Link>
         </div>
-      </div>
+      </main>
     );
   }
 
+  const inputClass =
+    "mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 disabled:opacity-60";
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-900 px-4 py-12 font-sans text-slate-100">
-      <div className="w-full max-w-md space-y-8 bg-slate-800 p-8 rounded-xl shadow-xl border border-slate-700">
-        <div className="text-center">
-          <h2 className="text-3xl font-extrabold text-white tracking-tight">Academic Catalyst</h2>
-          <p className="mt-2 text-sm text-slate-400">Create an elite agency account to get started</p>
-        </div>
+    <main className="flex min-h-screen items-center justify-center bg-slate-50 px-4 py-12">
+      <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-lg">
+        <h1 className="text-2xl font-semibold text-slate-900">Create your account</h1>
+        <p className="mt-1 text-sm text-slate-600">
+          Start building your research proposals with Academic Catalyst.
+        </p>
 
-        {error && (
-          <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-3 rounded-lg text-sm" role="alert">
-            {error}
-          </div>
-        )}
-
-        <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} className="mt-6 space-y-4" noValidate>
           <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Full Name</label>
+            <label htmlFor="full_name" className="block text-sm font-medium text-slate-700">
+              Full name
+            </label>
             <input
-              name="fullName"
+              id="full_name"
               type="text"
               autoComplete="name"
-              required
-              disabled={loading}
-              value={formData.fullName}
-              onChange={handleChange}
-              className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 transition-colors"
-              placeholder="e.g. John Doe"
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              disabled={submitting}
+              className={inputClass}
             />
           </div>
 
           <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Email Address</label>
+            <label htmlFor="position" className="block text-sm font-medium text-slate-700">
+              Position or title <span className="font-normal text-slate-500">(optional)</span>
+            </label>
             <input
-              name="email"
+              id="position"
+              type="text"
+              autoComplete="organization-title"
+              value={position}
+              onChange={(e) => setPosition(e.target.value)}
+              disabled={submitting}
+              placeholder="For example: Assistant Lecturer"
+              maxLength={200}
+              className={inputClass}
+            />
+          </div>
+
+          <div>
+            <label htmlFor="affiliation" className="block text-sm font-medium text-slate-700">
+              Organisation or department <span className="font-normal text-slate-500">(optional)</span>
+            </label>
+            <input
+              id="affiliation"
+              type="text"
+              autoComplete="organization"
+              value={affiliation}
+              onChange={(e) => setAffiliation(e.target.value)}
+              disabled={submitting}
+              placeholder="For example: Faculty of Veterinary Medicine, Makerere University"
+              maxLength={200}
+              className={inputClass}
+            />
+            <p className="mt-1 text-xs text-slate-500">
+              These appear on the cover page of your documents. You can add more details later.
+            </p>
+          </div>
+
+          <div>
+            <label htmlFor="email" className="block text-sm font-medium text-slate-700">
+              Email address
+            </label>
+            <input
+              id="email"
               type="email"
               autoComplete="email"
-              required
-              disabled={loading}
-              value={formData.email}
-              onChange={handleChange}
-              className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 transition-colors"
-              placeholder="consultant@agency.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              disabled={submitting}
+              className={inputClass}
             />
           </div>
 
           <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Password</label>
+            <label htmlFor="password" className="block text-sm font-medium text-slate-700">
+              Password
+            </label>
             <input
-              name="password"
+              id="password"
               type="password"
               autoComplete="new-password"
-              required
-              disabled={loading}
-              value={formData.password}
-              onChange={handleChange}
-              className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 transition-colors"
-              placeholder="Minimum 8 characters"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              disabled={submitting}
+              className={inputClass}
             />
+            <p className="mt-1 text-xs text-slate-500">
+              At least {MIN_PASSWORD_LENGTH} characters.
+            </p>
           </div>
 
           <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Confirm Password</label>
+            <label htmlFor="confirm_password" className="block text-sm font-medium text-slate-700">
+              Confirm password
+            </label>
             <input
-              name="confirmPassword"
+              id="confirm_password"
               type="password"
               autoComplete="new-password"
-              required
-              disabled={loading}
-              value={formData.confirmPassword}
-              onChange={handleChange}
-              className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 transition-colors"
-              placeholder="Re-enter your password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              disabled={submitting}
+              className={inputClass}
             />
+          </div>
+
+          <label className="flex items-start gap-3 text-xs text-slate-600">
+            <input
+              type="checkbox"
+              checked={agreed}
+              onChange={(e) => setAgreed(e.target.checked)}
+              disabled={submitting}
+              className="mt-0.5 h-4 w-4 rounded border-slate-300 text-indigo-600"
+            />
+            <span>
+              I accept the{" "}
+              <Link href="/terms" target="_blank" className="font-medium text-indigo-600 hover:underline">
+                Terms of Service
+              </Link>{" "}
+              and the{" "}
+              <Link href="/privacy" target="_blank" className="font-medium text-indigo-600 hover:underline">
+                Privacy Policy
+              </Link>
+              , and I consent to my data being processed for the purpose of handling my requests.
+            </span>
+          </label>
+
+          <div aria-live="polite">
+            {error && (
+              <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+                {error}
+              </p>
+            )}
           </div>
 
           <button
             type="submit"
-            disabled={loading}
-            className="w-full bg-amber-600 hover:bg-amber-500 text-white font-medium py-2.5 rounded-lg text-sm transition-colors mt-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={submitting}
+            className="w-full rounded-lg bg-indigo-600 px-4 py-2.5 font-medium text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {loading ? 'Creating Account...' : 'Sign Up As Consultant'}
+            {submitting ? "Creating your account..." : "Create account"}
           </button>
         </form>
 
-        <div className="text-center pt-2 border-t border-slate-700">
-          <p className="text-xs text-slate-400">
-            Already have an account?{' '}
-            <Link href="/login" className="font-medium text-amber-500 hover:text-amber-400 transition-colors">
-              Log in here
-            </Link>
-          </p>
-        </div>
+        <p className="mt-6 text-center text-sm text-slate-600">
+          Already have an account?{" "}
+          <Link href="/login" className="font-medium text-indigo-600 hover:underline">
+            Sign in
+          </Link>
+        </p>
       </div>
-    </div>
+    </main>
   );
 }

@@ -95,6 +95,16 @@ export default function LoginPage() {
             Create an account
           </Link>
         </p>
+
+        <p className="mt-4 text-center text-xs text-slate-500">
+          <Link href="/privacy" className="hover:underline">
+            Privacy Policy
+          </Link>
+          <span className="mx-2">·</span>
+          <Link href="/terms" className="hover:underline">
+            Terms of Service
+          </Link>
+        </p>
       </div>
     </main>
   );

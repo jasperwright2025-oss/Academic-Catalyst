@@ -16,12 +16,15 @@ import {
   submitMomoTransaction,
   getMomoPaymentStatus,
   verifyPesapalPayment,
+  recordDocumentEvent,
   logout,
   isUnauthorized,
   isPaywall,
   isRateLimited,
   PAYWALL_OFFERS,
 } from "@/lib/api/client";
+import { splitClarity } from "@/lib/documents/clarity";
+import CoverDetailsPanel from "@/components/CoverDetailsPanel";
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -576,6 +579,211 @@ function MomoPaymentPanel({ product, onPaid, onBack, onClose, onUnauthorized }) 
 }
 
 // ---------------------------------------------------------------------------
+// Example guide: an animated demo of the form being filled in, plus what to write in each box
+// ---------------------------------------------------------------------------
+const GUIDE_EXAMPLE = {
+  topic:
+    "Environmental factors influencing the behaviour of migratory birds across seasons and how this affects their reproductive cycles",
+  institution: "Makerere University",
+  background:
+    "I am an assistant lecturer in the Faculty of Veterinary Medicine at Makerere University. I am preparing to mark students' papers, and one of the participants has done research on the migratory behaviour of birds and how this affects their reproductive cycles. I have not had much preparation in this area. I am seeking clarity on the research topic, the study objectives, the research questions and the literature review, so that I have a better perspective before I meet the students.",
+};
+
+function PenIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      className="ml-1 inline h-4 w-4 animate-pulse align-text-bottom text-indigo-600"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M12 20h9" />
+      <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+    </svg>
+  );
+}
+
+function ExampleGuide({ onClose }) {
+  const [typed, setTyped] = useState({ topic: "", institution: "", background: "" });
+  const [activeField, setActiveField] = useState("topic");
+  const [run, setRun] = useState(0);
+
+  useEscape(onClose);
+
+  useEffect(() => {
+    const reduceMotion =
+      typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+
+    // People who prefer less motion see the finished example straight away.
+    if (reduceMotion) {
+      setTyped({ ...GUIDE_EXAMPLE });
+      setActiveField(null);
+      return undefined;
+    }
+
+    const order = ["topic", "institution", "background"];
+    let cancelled = false;
+    let timer;
+    let fieldIndex = 0;
+    let charIndex = 0;
+    setTyped({ topic: "", institution: "", background: "" });
+
+    const step = () => {
+      if (cancelled) return;
+      const key = order[fieldIndex];
+      if (!key) {
+        setActiveField(null);
+        return;
+      }
+      setActiveField(key);
+      const text = GUIDE_EXAMPLE[key];
+      charIndex = Math.min(text.length, charIndex + 3);
+      setTyped((prev) => ({ ...prev, [key]: text.slice(0, charIndex) }));
+      if (charIndex >= text.length) {
+        fieldIndex += 1;
+        charIndex = 0;
+        timer = setTimeout(step, 700);
+      } else {
+        timer = setTimeout(step, 28);
+      }
+    };
+
+    timer = setTimeout(step, 500);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [run]);
+
+  const box = (key, label, extra = "") => (
+    <div>
+      <p className="text-xs font-medium text-slate-600">{label}</p>
+      <div
+        className={`mt-1 min-h-[2.5rem] rounded-lg border px-3 py-2 text-sm text-slate-900 ${extra} ${
+          activeField === key ? "border-indigo-500 ring-2 ring-indigo-200" : "border-slate-300"
+        }`}
+      >
+        {typed[key]}
+        {activeField === key && <PenIcon />}
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/50 sm:items-center sm:p-4" onClick={onClose}>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="guide-title"
+        className="max-h-[92vh] w-full overflow-y-auto rounded-t-2xl bg-white p-6 shadow-2xl sm:max-w-2xl sm:rounded-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 id="guide-title" className="text-xl font-semibold text-slate-900">
+              How to fill in the form
+            </h2>
+            <p className="mt-1 text-sm text-slate-600">
+              Watch an example being written. The more context you give, the more useful the result.
+            </p>
+          </div>
+          <button type="button" onClick={onClose} aria-label="Close" className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100">
+            ✕
+          </button>
+        </div>
+
+        <div className="mt-5 space-y-3 rounded-xl bg-slate-50 p-4" aria-label="Animated example of the form">
+          {box("topic", "Research topic")}
+          {box("institution", "Target institution")}
+          {box("background", "Project background", "min-h-[8rem] leading-relaxed")}
+        </div>
+        <div className="mt-2 text-right">
+          <button
+            type="button"
+            onClick={() => setRun((n) => n + 1)}
+            className="text-xs font-medium text-indigo-600 hover:underline"
+          >
+            Watch again
+          </button>
+        </div>
+
+        <div className="mt-4 space-y-3 text-sm text-slate-700">
+          <p>
+            <span className="font-semibold text-slate-900">Research topic.</span> One sentence that says what is being
+            studied. Add the setting or the group of people if you can.
+          </p>
+          <p>
+            <span className="font-semibold text-slate-900">Target institution.</span> The university or organisation
+            whose format and referencing style the document should follow.
+          </p>
+          <p>
+            <span className="font-semibold text-slate-900">Project background.</span> Tell us who you are, why you need
+            this, what you already know, and exactly where you need clarity, for example the objectives, the research
+            questions, the literature or the method. A few sentences or a few short paragraphs is plenty.
+          </p>
+          <p className="rounded-lg bg-indigo-50 px-3 py-2 text-xs text-indigo-900">
+            Tips: say what the document is for (a pilot study, an instrument test, a marking scheme, a viability study),
+            and keep out names or personal details of research participants.
+          </p>
+        </div>
+
+        <div className="mt-5 flex justify-end">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+          >
+            Got it
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Clarity note: a plain-language companion, shown apart from the document
+// ---------------------------------------------------------------------------
+function ClarityNote({ note }) {
+  const [copied, setCopied] = useState(false);
+  if (!note) return null;
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(note);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // The note is on screen, so it can still be copied by hand.
+    }
+  }
+
+  return (
+    <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h4 className="text-sm font-semibold text-amber-900">Clarity note for you</h4>
+        <button
+          type="button"
+          onClick={copy}
+          className="rounded-md border border-amber-300 bg-white px-2.5 py-1 text-xs font-medium text-amber-900 hover:bg-amber-100"
+        >
+          {copied ? "Copied" : "Copy note"}
+        </button>
+      </div>
+      <p className="mt-1 text-xs text-amber-800">
+        A plain-language companion to help you understand the document. It is not part of the document, and it is left
+        out when you download, copy or print the document.
+      </p>
+      <div className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-slate-800">{note}</div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Paywall modal (tabs: pay once / monthly plans; methods: cards + mobile money, crypto)
 // ---------------------------------------------------------------------------
 function PaywallModal({ target, onClose, onUnauthorized, onPaid }) {
@@ -889,6 +1097,8 @@ function DocumentModal({ docId, onClose, onUnauthorized, onChanged, onPaywall, c
     };
   }, [docId, onUnauthorized]);
 
+  const parts = doc ? splitClarity(doc.generated_content) : { main: "", note: "" };
+
   async function unlock() {
     if (unlocking) return;
     if (!canUseCredit) {
@@ -913,7 +1123,8 @@ function DocumentModal({ docId, onClose, onUnauthorized, onChanged, onPaywall, c
 
   async function copyText() {
     try {
-      await navigator.clipboard.writeText(doc.generated_content);
+      await navigator.clipboard.writeText(parts.main);
+      recordDocumentEvent(docId, "copy");
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
@@ -961,9 +1172,10 @@ function DocumentModal({ docId, onClose, onUnauthorized, onChanged, onPaywall, c
             />
           )}
           {doc && !locked && (
-            <div className="whitespace-pre-wrap text-sm leading-relaxed text-slate-800">
-              {doc.generated_content}
-            </div>
+            <>
+              <div className="whitespace-pre-wrap text-sm leading-relaxed text-slate-800">{parts.main}</div>
+              <ClarityNote note={parts.note} />
+            </>
           )}
         </div>
 
@@ -978,16 +1190,20 @@ function DocumentModal({ docId, onClose, onUnauthorized, onChanged, onPaywall, c
             </button>
             <button
               type="button"
-              onClick={() =>
-                downloadText(`${fileSlug(doc.research_topic || doc.document_type)}.txt`, doc.generated_content)
-              }
+              onClick={() => {
+                downloadText(`${fileSlug(doc.research_topic || doc.document_type)}.txt`, parts.main);
+                recordDocumentEvent(docId, "download");
+              }}
               className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
             >
               Download .txt
             </button>
             <button
               type="button"
-              onClick={() => printText(doc.research_topic || "Document", doc.generated_content)}
+              onClick={() => {
+                printText(doc.research_topic || "Document", parts.main);
+                recordDocumentEvent(docId, "print");
+              }}
               className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
             >
               Print
@@ -1020,6 +1236,7 @@ export default function DashboardPage() {
   const [topic, setTopic] = useState("");
   const [institution, setInstitution] = useState("");
   const [sample, setSample] = useState("");
+  const [showGuide, setShowGuide] = useState(false);
   const [uploadedProposal, setUploadedProposal] = useState("");
   const [uploadedFieldData, setUploadedFieldData] = useState("");
   const [generating, setGenerating] = useState(false);
@@ -1169,7 +1386,7 @@ export default function DashboardPage() {
       action_type: action,
       research_topic: topic.trim(),
       target_institution: institution.trim(),
-      writing_sample: sample.trim(),
+      project_background: sample.trim(),
     };
     if (action !== "generate_proposal") payload.uploaded_proposal = uploadedProposal;
     if (action === "compile_dissertation") payload.uploaded_field_data = uploadedFieldData;
@@ -1227,7 +1444,8 @@ export default function DashboardPage() {
 
   async function copyResult() {
     try {
-      await navigator.clipboard.writeText(result.text);
+      await navigator.clipboard.writeText(splitClarity(result.text).main);
+      recordDocumentEvent(result.documentId, "copy");
       setResultCopied(true);
       setTimeout(() => setResultCopied(false), 2000);
     } catch {
@@ -1425,22 +1643,34 @@ export default function DashboardPage() {
                 </p>
               )}
 
-              {action !== "simulate_data" && (
-                <div>
-                  <label htmlFor="writing_sample" className="block text-sm font-medium text-slate-700">
-                    Writing sample <span className="font-normal text-slate-500">(optional)</span>
+              <div>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <label htmlFor="project_background" className="block text-sm font-medium text-slate-700">
+                    Project background <span className="font-normal text-slate-500">(recommended)</span>
                   </label>
-                  <textarea
-                    id="writing_sample"
-                    rows={4}
-                    value={sample}
-                    onChange={(e) => setSample(e.target.value)}
-                    disabled={generating}
-                    placeholder="Paste a sample of your own writing (at least 100 characters) to match your voice."
-                    className={fieldClass}
-                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowGuide(true)}
+                    className="text-xs font-medium text-indigo-600 hover:underline"
+                  >
+                    See an example
+                  </button>
                 </div>
-              )}
+                <p className="mt-1 text-xs text-slate-500">
+                  Give us a short background to your project and where you need clarity. The more context you provide,
+                  the better we are able to assist you.
+                </p>
+                <textarea
+                  id="project_background"
+                  rows={5}
+                  maxLength={4000}
+                  value={sample}
+                  onChange={(e) => setSample(e.target.value)}
+                  disabled={generating}
+                  placeholder="Who you are, what the project is about, what you already know, and exactly where you need clarity."
+                  className={fieldClass}
+                />
+              </div>
 
               <div aria-live="polite">
                 {genError && (
@@ -1486,14 +1716,20 @@ export default function DashboardPage() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => downloadText(`${fileSlug(topic || result.label)}.txt`, result.text)}
+                        onClick={() => {
+                          downloadText(`${fileSlug(topic || result.label)}.txt`, splitClarity(result.text).main);
+                          recordDocumentEvent(result.documentId, "download");
+                        }}
                         className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-700"
                       >
                         Download .txt
                       </button>
                       <button
                         type="button"
-                        onClick={() => printText(topic || result.label, result.text)}
+                        onClick={() => {
+                          printText(topic || result.label, splitClarity(result.text).main);
+                          recordDocumentEvent(result.documentId, "print");
+                        }}
                         className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
                       >
                         Print
@@ -1518,8 +1754,9 @@ export default function DashboardPage() {
                   <>
                     <p className="mt-1 text-xs text-slate-600">A copy has been saved to your history below.</p>
                     <div className="mt-3 max-h-96 overflow-y-auto whitespace-pre-wrap rounded-lg bg-white p-4 text-sm leading-relaxed text-slate-800">
-                      {result.text}
+                      {splitClarity(result.text).main}
                     </div>
+                    <ClarityNote note={splitClarity(result.text).note} />
                   </>
                 )}
               </div>
@@ -1527,6 +1764,7 @@ export default function DashboardPage() {
           </section>
 
           {/* Plan and credits */}
+          <div className="space-y-6">
           <aside className="h-fit rounded-2xl bg-white p-6 shadow-sm">
             <h2 className="text-lg font-semibold text-slate-900">Plan and credits</h2>
 
@@ -1581,6 +1819,8 @@ export default function DashboardPage() {
               </>
             )}
           </aside>
+          <CoverDetailsPanel />
+        </div>
         </div>
 
         {/* Documents history */}
@@ -1688,6 +1928,18 @@ export default function DashboardPage() {
           )}
         </section>
       </main>
+
+      <footer className="mx-auto max-w-6xl px-4 pb-10 text-center text-xs text-slate-500">
+        <a href="/privacy" className="hover:underline">
+          Privacy Policy
+        </a>
+        <span className="mx-2">·</span>
+        <a href="/terms" className="hover:underline">
+          Terms of Service
+        </a>
+      </footer>
+
+      {showGuide && <ExampleGuide onClose={() => setShowGuide(false)} />}
 
       {paywall && (
         <PaywallModal

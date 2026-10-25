@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { normalizeSubscription } from "@/lib/payments/plan";
+import { logDocumentEvent } from "@/lib/documents/events";
 
 export const dynamic = "force-dynamic";
 
@@ -148,6 +149,7 @@ export async function POST(request, { params }) {
 
     // Locked copy no longer needed (best effort).
     await admin.from("document_secrets").delete().eq("document_id", String(doc.id));
+    await logDocumentEvent(admin, doc.id, user.id, "unlocked");
 
     return NextResponse.json({
       success: true,
