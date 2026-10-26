@@ -78,6 +78,12 @@ export default function LoginPage() {
                 {error}
               </p>
             )}
+            {error && /invalid/i.test(error) && (
+              <p className="mt-2 text-xs text-slate-500">
+                Check your email address and password. If you have just registered, confirm your email address first
+                using the link we sent you (look in your spam folder too).
+              </p>
+            )}
           </div>
 
           <button

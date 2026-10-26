@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { register, login } from "@/lib/api/client";
 import { PENDING_COVER_KEY } from "@/components/CoverDetailsPanel";
+import { LEGAL } from "@/lib/legal";
+import TurnstileWidget, { TURNSTILE_ENABLED } from "@/components/TurnstileWidget";
 
 const MIN_PASSWORD_LENGTH = 8;
 
@@ -19,6 +21,8 @@ export default function RegisterPage() {
   const [error, setError] = useState("");
   const [accountCreated, setAccountCreated] = useState(false);
   const [agreed, setAgreed] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState("");
+  const [captchaReset, setCaptchaReset] = useState(0);
   const [submitting, setSubmitting] = useState(false);
 
   function validate() {
@@ -31,6 +35,7 @@ export default function RegisterPage() {
     }
     if (password !== confirmPassword) return "The two passwords do not match.";
     if (!agreed) return "Please confirm that you accept the Terms of Service and the Privacy Policy to continue.";
+    if (TURNSTILE_ENABLED && !captchaToken) return "Please complete the security check.";
     return "";
   }
 
@@ -73,8 +78,11 @@ export default function RegisterPage() {
         email: cleanEmail,
         password,
         full_name: fullName.trim(),
+        turnstile_token: captchaToken,
       });
     } catch (err) {
+      // The security check works only once, so bring it back for the next attempt.
+      setCaptchaReset((n) => n + 1);
       setError(err.message || "We could not create your account. Please try again.");
       setSubmitting(false);
       return;
@@ -105,8 +113,8 @@ export default function RegisterPage() {
         <div className="w-full max-w-md rounded-2xl bg-white p-8 text-center shadow-lg">
           <h1 className="text-2xl font-semibold text-slate-900">Your account is ready</h1>
           <p className="mt-3 text-sm text-slate-600">
-            If email confirmation is required, please check your inbox and confirm your
-            address first. Then you can sign in.
+            Please check your inbox, and your spam folder, for an email from us and click the confirmation link.
+            Then sign in. If nothing arrives within a few minutes, write to {LEGAL.contactEmail}.
           </p>
           <Link
             href="/login"
@@ -251,6 +259,8 @@ export default function RegisterPage() {
               , and I consent to my data being processed for the purpose of handling my requests.
             </span>
           </label>
+
+          <TurnstileWidget onToken={setCaptchaToken} resetKey={captchaReset} />
 
           <div aria-live="polite">
             {error && (

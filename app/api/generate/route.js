@@ -227,6 +227,24 @@ export async function POST(request) {
             { status: 403 }
           );
         }
+        // Daily safety cap on free previews across all accounts, to protect the AI budget.
+        const dailyCap = Number(process.env.FREE_PREVIEW_DAILY_CAP || 30);
+        const startOfDay = new Date();
+        startOfDay.setUTCHours(0, 0, 0, 0);
+        const { count: previewsToday } = await createAdminClient()
+          .from('documents')
+          .select('id', { count: 'exact', head: true })
+          .eq('is_unlocked', false)
+          .gte('created_at', startOfDay.toISOString());
+        if ((previewsToday ?? 0) >= dailyCap) {
+          return NextResponse.json(
+            {
+              error: 'PREVIEW_LIMIT_REACHED',
+              message: 'Free previews are fully booked for today. Please try again tomorrow, or buy a proposal to continue.',
+            },
+            { status: 429 }
+          );
+        }
         previewMode = true;
       }
     } else if (action_type === 'simulate_data') {
