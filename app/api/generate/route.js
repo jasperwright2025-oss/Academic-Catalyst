@@ -60,9 +60,10 @@ async function runClaude({ systemPrompt, userPrompt, maxTokens, searchLimit }) {
       : undefined;
 
   const texts = [];
+  const turns = []; // a short record of each round, for the logs
   let last = null;
 
-  for (let turn = 0; turn < 4; turn++) {
+  for (let turn = 0; turn < 8; turn++) {
     let response;
     try {
       response = await anthropic.messages
@@ -84,6 +85,11 @@ async function runClaude({ systemPrompt, userPrompt, maxTokens, searchLimit }) {
     }
 
     last = response;
+    turns.push({
+      stop_reason: response.stop_reason,
+      blocks: (response.content || []).map((block) => block.type),
+      output_tokens: response.usage?.output_tokens,
+    });
     for (const block of response.content || []) {
       if (block.type === 'text') texts.push(block.text);
     }
@@ -98,6 +104,7 @@ async function runClaude({ systemPrompt, userPrompt, maxTokens, searchLimit }) {
     stopReason: last?.stop_reason,
     usage: last?.usage,
     blockTypes: (last?.content || []).map((block) => block.type),
+    turns,
   };
 }
 
@@ -367,6 +374,7 @@ The user's project background is supplied separately. It also shows how the user
         JSON.stringify({
           stop_reason: ai.stopReason,
           block_types: ai.blockTypes,
+          turns: ai.turns,
           usage: ai.usage,
           action_type,
         })

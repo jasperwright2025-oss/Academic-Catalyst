@@ -55,7 +55,8 @@ export default function CoverDetailsPanel() {
 
         let profile = { ...EMPTY, ...data.profile };
 
-        // Save any details typed at registration before the first sign in.
+        // Details typed at registration before the first sign in are used only if they belong to this same
+        // email address, and only to fill boxes that are still empty. Old leftovers are thrown away.
         let pending = null;
         try {
           const raw = localStorage.getItem(PENDING_COVER_KEY);
@@ -64,13 +65,24 @@ export default function CoverDetailsPanel() {
           // ignore unreadable storage
         }
         if (pending) {
-          const filled = Object.fromEntries(Object.entries(pending).filter(([, v]) => v));
-          profile = { ...profile, ...filled };
+          const sameAccount =
+            String(pending.email || "").toLowerCase() === String(profile.email || "").toLowerCase();
+          if (sameAccount && pending.details) {
+            const filled = Object.fromEntries(
+              Object.entries(pending.details).filter(([key, value]) => value && !profile[key])
+            );
+            if (Object.keys(filled).length > 0) {
+              try {
+                profile = { ...EMPTY, ...(await postProfile({ ...profile, ...filled })) };
+              } catch {
+                // keep going; the customer can type them in
+              }
+            }
+          }
           try {
-            profile = { ...EMPTY, ...(await postProfile(profile)) };
             localStorage.removeItem(PENDING_COVER_KEY);
           } catch {
-            // keep them for next time
+            // ignore
           }
         }
 

@@ -11,6 +11,7 @@ function readProfile(user) {
   const meta = user?.user_metadata || {};
   const cover = meta.cover || {};
   return {
+    email: user?.email || "",
     full_name: meta.full_name || "",
     position: cover.position || "",
     affiliation: cover.affiliation || "",

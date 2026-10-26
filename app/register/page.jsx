@@ -71,6 +71,11 @@ export default function RegisterPage() {
 
     const cleanEmail = email.trim();
     setSubmitting(true);
+    try {
+      localStorage.removeItem(PENDING_COVER_KEY); // forget details from any earlier attempt
+    } catch {
+      // ignore
+    }
 
     // 1. Create the account
     try {
@@ -98,7 +103,10 @@ export default function RegisterPage() {
     } catch {
       // Not signed in yet (email confirmation), so keep the details for the first visit to the dashboard.
       try {
-        localStorage.setItem(PENDING_COVER_KEY, JSON.stringify(coverDetails()));
+        localStorage.setItem(
+          PENDING_COVER_KEY,
+          JSON.stringify({ email: cleanEmail.toLowerCase(), details: coverDetails() })
+        );
       } catch {
         // ignore
       }
