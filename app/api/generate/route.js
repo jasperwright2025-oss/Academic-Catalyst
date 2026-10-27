@@ -96,7 +96,16 @@ async function runClaude({ systemPrompt, userPrompt, maxTokens, searchLimit }) {
 
     // Long research turns can pause; send the work so far back to carry on.
     if (response.stop_reason !== 'pause_turn') break;
-    messages.push({ role: 'assistant', content: response.content });
+    if ((response.usage?.input_tokens || 0) > 150000) {
+      console.warn('Research conversation is too large to continue safely, stopping.', JSON.stringify(response.usage));
+      break;
+    }
+    messages.push({
+      role: 'assistant',
+      content: (response.content || []).filter(
+        (block) => block.type !== 'text' || String(block.text || '').trim()
+      ),
+    });
   }
 
   return {
@@ -336,7 +345,7 @@ The user's project background is supplied separately. It also shows how the user
         coverDetails,
       });
       maxTokens = 24000;
-      searchLimit = 20;
+      searchLimit = 8;
     } else if (action_type === 'simulate_data') {
       docTypeLabel = 'field_data';
       systemPrompt = buildDataSystemPrompt();
@@ -358,7 +367,7 @@ The user's project background is supplied separately. It also shows how the user
         targetInstitution: target_institution,
       });
       maxTokens = 32000;
-      searchLimit = 30;
+      searchLimit = 12;
     }
 
     // ---------- 7. Call Claude ----------
@@ -502,6 +511,15 @@ The user's project background is supplied separately. It also shows how the user
       payload: finalGeneratedContent,
     });
   } catch (error) {
+    console.error(
+      'AI request error:',
+      JSON.stringify({
+        status: error?.status,
+        type: error?.error?.error?.type,
+        message: error?.error?.error?.message || error?.message,
+        request_id: error?.request_id,
+      })
+    );
     console.error('Core Application Server Error:', error);
     if (error?.code === 'WEB_SEARCH_UNAVAILABLE') {
       return NextResponse.json(
