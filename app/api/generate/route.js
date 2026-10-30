@@ -38,6 +38,13 @@ function extractDocument(text) {
   return (close === -1 ? text.slice(start) : text.slice(start, close)).trim();
 }
 
+// How many web searches a document may use. Change it in Vercel with PROPOSAL_SEARCH_LIMIT or
+// DISSERTATION_SEARCH_LIMIT: more searches give a wider literature review but cost more and take longer.
+function searchBudget(name, fallback) {
+  const value = Number(process.env[name]);
+  return Number.isFinite(value) && value >= 3 && value <= 30 ? Math.floor(value) : fallback;
+}
+
 // Pulls the optional clarity note out of the model's reply.
 function extractClarityNote(text) {
   const OPEN = '<clarity_note>';
@@ -345,7 +352,7 @@ The user's project background is supplied separately. It also shows how the user
         coverDetails,
       });
       maxTokens = 24000;
-      searchLimit = 8;
+      searchLimit = searchBudget('PROPOSAL_SEARCH_LIMIT', 14);
     } else if (action_type === 'simulate_data') {
       docTypeLabel = 'field_data';
       systemPrompt = buildDataSystemPrompt();
@@ -367,7 +374,7 @@ The user's project background is supplied separately. It also shows how the user
         targetInstitution: target_institution,
       });
       maxTokens = 32000;
-      searchLimit = 12;
+      searchLimit = searchBudget('DISSERTATION_SEARCH_LIMIT', 20);
     }
 
     // ---------- 7. Call Claude ----------
