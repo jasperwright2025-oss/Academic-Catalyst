@@ -5,6 +5,11 @@ import { runNextStage, kickJob } from "@/lib/generation/runner";
 export const maxDuration = 300;
 export const dynamic = "force-dynamic";
 
+// Work stops before maxDuration so the hand-over to the next request always happens.
+const REQUEST_BUDGET_SECONDS = 270;
+// A stage usually takes 60 to 120 seconds; do not start one with less time than this left.
+const MIN_SECONDS_FOR_ANOTHER_STAGE = 150;
+
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
@@ -26,10 +31,21 @@ export async function POST(request) {
   }
 
   const origin = new URL(request.url).origin;
+  // Runs as many stages as fit in this request, then hands over to a fresh request.
+  // Fewer hand-overs means Vercel's loop protection is not triggered on long documents.
+  const startedAt = Date.now();
+  const requestDeadline = startedAt + REQUEST_BUDGET_SECONDS * 1000;
   after(async () => {
     try {
-      const outcome = await runNextStage(jobId, origin);
-      if (outcome === "next") await kickJob(origin, jobId);
+      for (;;) {
+        const outcome = await runNextStage(jobId, origin, { deadlineMs: requestDeadline });
+        if (outcome !== "next") break;
+        const secondsLeft = (requestDeadline - Date.now()) / 1000;
+        if (secondsLeft < MIN_SECONDS_FOR_ANOTHER_STAGE) {
+          await kickJob(origin, jobId);
+          break;
+        }
+      }
     } catch (err) {
       console.error("Job run error:", jobId, err?.message || err);
     }
