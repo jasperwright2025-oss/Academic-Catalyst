@@ -1,1 +1,22 @@
 @import "tailwindcss";
+
+/* Academic Catalyst brand: ink navy text, catalyst green actions, amber highlights. */
+@theme {
+  --font-sans: "Manrope", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Newsreader", Georgia, "Times New Roman", serif;
+  --color-ink: #10203A;
+  --color-ink-soft: #3D4A60;
+  --color-muted: #5B6577;
+  --color-paper: #FAFAF7;
+  --color-line: #E6E6DF;
+  --color-brand: #0E7C66;
+  --color-brand-dark: #0A5E4D;
+  --color-mint: #E3F2EE;
+  --color-amber: #E8A33D;
+  --color-sand: #FDF3E3;
+}
+
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+
+@keyframes fadeUp { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
