@@ -1015,12 +1015,39 @@ function printText(title, text) {
 // Locked preview: the first pages are readable, the rest is behind an unlock button
 // ---------------------------------------------------------------------------
 function LockedPreview({ text, sections, totalWords, canUseCredit, unlocking, onUnlock, error }) {
-  const shownSections = (sections || []).slice(0, 12);
+  const shownSections = (sections || []).slice(0, 8);
   const extra = (sections || []).length - shownSections.length;
 
+  // The unlock button comes first, so it is always visible without scrolling.
   return (
     <div>
-      <div className="relative overflow-hidden rounded-lg bg-white">
+      <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-4">
+        <p className="text-sm font-semibold text-indigo-900">
+          This is a free preview{totalWords ? `. The full document is about ${totalWords.toLocaleString()} words.` : "."}
+        </p>
+        <p className="mt-1 text-xs text-indigo-800">
+          Unlock it to read everything, then download the formatted Word document.
+        </p>
+        {error && (
+          <p role="alert" className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+            {error}
+          </p>
+        )}
+        <button
+          type="button"
+          onClick={onUnlock}
+          disabled={unlocking}
+          className="mt-3 w-full rounded-lg bg-indigo-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {unlocking
+            ? "Unlocking..."
+            : canUseCredit
+            ? "Unlock the full proposal (uses 1 proposal credit)"
+            : "Unlock the full proposal"}
+        </button>
+      </div>
+
+      <div className="relative mt-4 overflow-hidden rounded-lg bg-white">
         <div className="max-h-96 overflow-hidden whitespace-pre-wrap p-4 text-sm leading-relaxed text-slate-800">
           {text}
         </div>
@@ -1030,16 +1057,10 @@ function LockedPreview({ text, sections, totalWords, canUseCredit, unlocking, on
         />
       </div>
 
-      <div className="mt-4 rounded-xl border border-indigo-200 bg-indigo-50 p-4">
-        <p className="text-sm font-semibold text-indigo-900">
-          This is a free preview{totalWords ? `. The full document is about ${totalWords.toLocaleString()} words.` : "."}
-        </p>
-        <p className="mt-1 text-xs text-indigo-800">
-          Unlock it to read everything, then copy, download or print the complete document.
-        </p>
-
-        {shownSections.length > 0 && (
-          <ul className="mt-3 space-y-1 text-sm text-slate-700">
+      {shownSections.length > 0 && (
+        <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
+          <p className="text-sm font-semibold text-slate-800">Also in the full document</p>
+          <ul className="mt-2 space-y-1 text-sm text-slate-700">
             {shownSections.map((title) => (
               <li key={title} className="flex items-start gap-2">
                 <span aria-hidden="true">🔒</span>
@@ -1048,34 +1069,12 @@ function LockedPreview({ text, sections, totalWords, canUseCredit, unlocking, on
             ))}
             {extra > 0 && <li className="text-xs text-slate-500">and {extra} more sections</li>}
           </ul>
-        )}
-
-        {error && (
-          <p role="alert" className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
-            {error}
-          </p>
-        )}
-
-        <button
-          type="button"
-          onClick={onUnlock}
-          disabled={unlocking}
-          className="mt-4 w-full rounded-lg bg-indigo-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          {unlocking
-            ? "Unlocking..."
-            : canUseCredit
-            ? "Unlock the full proposal (uses 1 proposal credit)"
-            : "Unlock the full proposal"}
-        </button>
-      </div>
+        </div>
+      )}
     </div>
   );
 }
 
-// ---------------------------------------------------------------------------
-// Document viewer modal
-// ---------------------------------------------------------------------------
 function DocumentModal({ docId, onClose, onUnauthorized, onChanged, onPaywall, canUseCredit }) {
   const [doc, setDoc] = useState(null);
   const [locked, setLocked] = useState(false);
