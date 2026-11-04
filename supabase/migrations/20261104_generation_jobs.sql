@@ -33,3 +33,6 @@ revoke all on public.generation_jobs from anon, authenticated;
 
 -- Reference check written for the customer, kept out of the document itself.
 alter table public.generation_jobs add column if not exists verification_note text;
+
+-- Security advisor fix: fixed search path on the credit function.
+alter function public.increment_proposal_credit(uuid) set search_path = public, pg_temp;
