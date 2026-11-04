@@ -24,7 +24,7 @@ const FIELDS = [
 ];
 
 const inputClass =
-  "mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 disabled:opacity-60";
+  "mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-brand focus:ring-2 focus:ring-[#BFE0D6] disabled:opacity-60";
 
 async function postProfile(values) {
   const res = await fetch("/api/profile", {
@@ -141,7 +141,7 @@ export default function CoverDetailsPanel() {
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
-          className="mt-3 text-xs font-medium text-indigo-600 hover:underline"
+          className="mt-3 text-xs font-medium text-brand hover:underline"
         >
           {open ? "Hide" : "Edit details"}
         </button>
@@ -179,7 +179,7 @@ export default function CoverDetailsPanel() {
           <button
             type="submit"
             disabled={saving}
-            className="w-full rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+            className="w-full rounded-lg bg-brand px-4 py-2.5 text-sm font-medium text-white hover:bg-brand-dark disabled:cursor-not-allowed disabled:opacity-60"
           >
             {saving ? "Saving..." : "Save details"}
           </button>

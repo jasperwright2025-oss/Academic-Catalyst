@@ -1,5 +1,7 @@
 "use client";
 
+import Logo from "@/components/site/Logo";
+
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -34,9 +36,13 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-slate-50 px-4 py-12">
+    <main className="flex min-h-screen items-center justify-center bg-paper px-4 py-12 font-sans text-ink">
       <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-lg">
-        <h1 className="text-2xl font-semibold text-slate-900">Welcome back</h1>
+        <Link href="/" className="mb-6 flex items-center gap-2 text-ink">
+          <Logo />
+          <span className="font-serif text-lg font-semibold">Academic Catalyst</span>
+        </Link>
+        <h1 className="font-serif text-3xl font-medium text-ink">Welcome back</h1>
         <p className="mt-1 text-sm text-slate-600">
           Sign in to your Academic Catalyst workspace.
         </p>
@@ -53,7 +59,7 @@ export default function LoginPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               disabled={submitting}
-              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 disabled:opacity-60"
+              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 outline-none focus:border-brand focus:ring-2 focus:ring-[#BFE0D6] disabled:opacity-60"
             />
           </div>
 
@@ -62,7 +68,7 @@ export default function LoginPage() {
               <label htmlFor="password" className="block text-sm font-medium text-slate-700">
                 Password
               </label>
-              <Link href="/forgot-password" className="text-xs font-medium text-indigo-600 hover:underline">
+              <Link href="/forgot-password" className="text-xs font-medium text-brand hover:underline">
                 Forgot password?
               </Link>
             </div>
@@ -73,7 +79,7 @@ export default function LoginPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               disabled={submitting}
-              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 disabled:opacity-60"
+              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 outline-none focus:border-brand focus:ring-2 focus:ring-[#BFE0D6] disabled:opacity-60"
             />
           </div>
 
@@ -94,7 +100,7 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={submitting}
-            className="w-full rounded-lg bg-indigo-600 px-4 py-2.5 font-medium text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+            className="w-full rounded-lg bg-brand px-4 py-2.5 font-medium text-white transition hover:bg-brand-dark disabled:cursor-not-allowed disabled:opacity-60"
           >
             {submitting ? "Signing in..." : "Sign in"}
           </button>
@@ -102,7 +108,7 @@ export default function LoginPage() {
 
         <p className="mt-6 text-center text-sm text-slate-600">
           New to Academic Catalyst?{" "}
-          <Link href="/register" className="font-medium text-indigo-600 hover:underline">
+          <Link href="/register" className="font-medium text-brand hover:underline">
             Create an account
           </Link>
         </p>

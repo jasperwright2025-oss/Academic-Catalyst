@@ -1,5 +1,7 @@
 "use client";
 
+import Logo from "@/components/site/Logo";
+
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -117,16 +119,16 @@ export default function RegisterPage() {
 
   if (accountCreated) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-slate-50 px-4 py-12">
+      <main className="flex min-h-screen items-center justify-center bg-paper px-4 py-12 font-sans text-ink">
         <div className="w-full max-w-md rounded-2xl bg-white p-8 text-center shadow-lg">
-          <h1 className="text-2xl font-semibold text-slate-900">Your account is ready</h1>
+          <h1 className="font-serif text-3xl font-medium text-ink">Your account is ready</h1>
           <p className="mt-3 text-sm text-slate-600">
             Please check your inbox, and your spam folder, for an email from us and click the confirmation link.
             Then sign in. If nothing arrives within a few minutes, write to {LEGAL.contactEmail}.
           </p>
           <Link
             href="/login"
-            className="mt-6 inline-block w-full rounded-lg bg-indigo-600 px-4 py-2.5 font-medium text-white transition hover:bg-indigo-700"
+            className="mt-6 inline-block w-full rounded-lg bg-brand px-4 py-2.5 font-medium text-white transition hover:bg-brand-dark"
           >
             Go to sign in
           </Link>
@@ -136,12 +138,16 @@ export default function RegisterPage() {
   }
 
   const inputClass =
-    "mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 disabled:opacity-60";
+    "mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 outline-none focus:border-brand focus:ring-2 focus:ring-[#BFE0D6] disabled:opacity-60";
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-slate-50 px-4 py-12">
+    <main className="flex min-h-screen items-center justify-center bg-paper px-4 py-12 font-sans text-ink">
       <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-lg">
-        <h1 className="text-2xl font-semibold text-slate-900">Create your account</h1>
+        <Link href="/" className="mb-6 flex items-center gap-2 text-ink">
+          <Logo />
+          <span className="font-serif text-lg font-semibold">Academic Catalyst</span>
+        </Link>
+        <h1 className="font-serif text-3xl font-medium text-ink">Create your account</h1>
         <p className="mt-1 text-sm text-slate-600">
           Start building your research proposals with Academic Catalyst.
         </p>
@@ -253,15 +259,15 @@ export default function RegisterPage() {
               checked={agreed}
               onChange={(e) => setAgreed(e.target.checked)}
               disabled={submitting}
-              className="mt-0.5 h-4 w-4 rounded border-slate-300 text-indigo-600"
+              className="mt-0.5 h-4 w-4 rounded border-slate-300 text-brand"
             />
             <span>
               I accept the{" "}
-              <Link href="/terms" target="_blank" className="font-medium text-indigo-600 hover:underline">
+              <Link href="/terms" target="_blank" className="font-medium text-brand hover:underline">
                 Terms of Service
               </Link>{" "}
               and the{" "}
-              <Link href="/privacy" target="_blank" className="font-medium text-indigo-600 hover:underline">
+              <Link href="/privacy" target="_blank" className="font-medium text-brand hover:underline">
                 Privacy Policy
               </Link>
               , and I consent to my data being processed for the purpose of handling my requests.
@@ -281,7 +287,7 @@ export default function RegisterPage() {
           <button
             type="submit"
             disabled={submitting}
-            className="w-full rounded-lg bg-indigo-600 px-4 py-2.5 font-medium text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+            className="w-full rounded-lg bg-brand px-4 py-2.5 font-medium text-white transition hover:bg-brand-dark disabled:cursor-not-allowed disabled:opacity-60"
           >
             {submitting ? "Creating your account..." : "Create account"}
           </button>
@@ -289,7 +295,7 @@ export default function RegisterPage() {
 
         <p className="mt-6 text-center text-sm text-slate-600">
           Already have an account?{" "}
-          <Link href="/login" className="font-medium text-indigo-600 hover:underline">
+          <Link href="/login" className="font-medium text-brand hover:underline">
             Sign in
           </Link>
         </p>

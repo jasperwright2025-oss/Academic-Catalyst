@@ -28,7 +28,7 @@ export default function LegalLayout({ title, children }) {
           <Link href="/" className="font-semibold text-slate-900">
             {LEGAL.productName}
           </Link>
-          <div className="flex gap-4 text-indigo-600">
+          <div className="flex gap-4 text-brand">
             <Link href="/privacy" className="hover:underline">
               Privacy Policy
             </Link>

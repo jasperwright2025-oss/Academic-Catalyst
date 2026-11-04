@@ -1,12 +1,14 @@
 "use client";
 
+import Logo from "@/components/site/Logo";
+
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { updatePassword, isUnauthorized } from "@/lib/api/client";
 
 const inputClass =
-  "mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 disabled:opacity-60";
+  "mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 outline-none focus:border-brand focus:ring-2 focus:ring-[#BFE0D6] disabled:opacity-60";
 
 export default function ResetPasswordPage() {
   const router = useRouter();
@@ -45,9 +47,13 @@ export default function ResetPasswordPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-slate-50 px-4 py-12">
+    <main className="flex min-h-screen items-center justify-center bg-paper px-4 py-12 font-sans text-ink">
       <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-lg">
-        <h1 className="text-2xl font-semibold text-slate-900">Choose a new password</h1>
+        <Link href="/" className="mb-6 flex items-center gap-2 text-ink">
+          <Logo />
+          <span className="font-serif text-lg font-semibold">Academic Catalyst</span>
+        </Link>
+        <h1 className="font-serif text-3xl font-medium text-ink">Choose a new password</h1>
 
         {done ? (
           <p className="mt-4 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
@@ -92,7 +98,7 @@ export default function ResetPasswordPage() {
               )}
               {expired && (
                 <p className="mt-2 text-sm">
-                  <Link href="/forgot-password" className="font-medium text-indigo-600 hover:underline">
+                  <Link href="/forgot-password" className="font-medium text-brand hover:underline">
                     Request a new reset link
                   </Link>
                 </p>
@@ -101,7 +107,7 @@ export default function ResetPasswordPage() {
             <button
               type="submit"
               disabled={submitting}
-              className="w-full rounded-lg bg-indigo-600 px-4 py-2.5 font-medium text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+              className="w-full rounded-lg bg-brand px-4 py-2.5 font-medium text-white transition hover:bg-brand-dark disabled:cursor-not-allowed disabled:opacity-60"
             >
               {submitting ? "Saving..." : "Save new password"}
             </button>

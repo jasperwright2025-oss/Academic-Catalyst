@@ -1,12 +1,14 @@
 "use client";
 
+import Logo from "@/components/site/Logo";
+
 import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { requestPasswordReset } from "@/lib/api/client";
 
 const inputClass =
-  "mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 disabled:opacity-60";
+  "mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 outline-none focus:border-brand focus:ring-2 focus:ring-[#BFE0D6] disabled:opacity-60";
 
 function ForgotPasswordForm() {
   const params = useSearchParams();
@@ -36,9 +38,13 @@ function ForgotPasswordForm() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-slate-50 px-4 py-12">
+    <main className="flex min-h-screen items-center justify-center bg-paper px-4 py-12 font-sans text-ink">
       <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-lg">
-        <h1 className="text-2xl font-semibold text-slate-900">Reset your password</h1>
+        <Link href="/" className="mb-6 flex items-center gap-2 text-ink">
+          <Logo />
+          <span className="font-serif text-lg font-semibold">Academic Catalyst</span>
+        </Link>
+        <h1 className="font-serif text-3xl font-medium text-ink">Reset your password</h1>
 
         {sent ? (
           <div className="mt-4 space-y-3 text-sm text-slate-700">
@@ -85,7 +91,7 @@ function ForgotPasswordForm() {
               <button
                 type="submit"
                 disabled={submitting}
-                className="w-full rounded-lg bg-indigo-600 px-4 py-2.5 font-medium text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+                className="w-full rounded-lg bg-brand px-4 py-2.5 font-medium text-white transition hover:bg-brand-dark disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {submitting ? "Sending..." : "Send reset link"}
               </button>
@@ -94,7 +100,7 @@ function ForgotPasswordForm() {
         )}
 
         <p className="mt-6 text-center text-sm text-slate-600">
-          <Link href="/login" className="font-medium text-indigo-600 hover:underline">
+          <Link href="/login" className="font-medium text-brand hover:underline">
             Back to sign in
           </Link>
         </p>
