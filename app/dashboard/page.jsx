@@ -107,6 +107,13 @@ function formatDate(value) {
   });
 }
 
+// Downloads the formatted Word (.docx) version of a document. The server records the download.
+function downloadWord(documentId, part = "document") {
+  if (!documentId) return;
+  const query = part === "clarity" ? "?part=clarity" : "";
+  window.location.href = `/api/documents/${encodeURIComponent(documentId)}/export${query}`;
+}
+
 function downloadText(filename, text) {
   const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
   const url = URL.createObjectURL(blob);
@@ -1193,13 +1200,10 @@ function DocumentModal({ docId, onClose, onUnauthorized, onChanged, onPaywall, c
             </button>
             <button
               type="button"
-              onClick={() => {
-                downloadText(`${fileSlug(doc.research_topic || doc.document_type)}.txt`, parts.main);
-                recordDocumentEvent(docId, "download");
-              }}
+              onClick={() => downloadWord(docId)}
               className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
             >
-              Download .txt
+              Download Word
             </button>
             <button
               type="button"
@@ -1857,13 +1861,10 @@ export default function DashboardPage() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => {
-                          downloadText(`${fileSlug(topic || result.label)}.txt`, splitClarity(result.text).main);
-                          recordDocumentEvent(result.documentId, "download");
-                        }}
+                        onClick={() => downloadWord(result.documentId)}
                         className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-700"
                       >
-                        Download .txt
+                        Download Word
                       </button>
                       <button
                         type="button"
