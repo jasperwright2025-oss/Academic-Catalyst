@@ -179,6 +179,8 @@ export async function POST(request) {
       project_background,
       uploaded_proposal,
       uploaded_field_data,
+      why_you, // optional: the researcher's own experience and motivation, for "Why Me"
+      why_now, // optional: the researcher's view of why the study is timely, for "Why Now"
       source_material, // optional: extra papers or notes for a proposal
       uploaded_transcripts, // optional: interview transcripts for a dissertation
     } = body;
@@ -310,10 +312,14 @@ export async function POST(request) {
     // The project background is context for the task, and also a light guide to how the user writes.
     const projectBackground = String(project_background ?? writing_sample ?? '').trim().slice(0, 4000);
 
+    const whyYou = String(why_you ?? '').trim().slice(0, 2000);
+    const whyNow = String(why_now ?? '').trim().slice(0, 2000);
+
+    // The default voice profile always governs the writing. What the customer supplies is context.
     let activeVoiceStyle = MASTER_VOICE_PROFILE;
     if (projectBackground.length > 100) {
       activeVoiceStyle = `${MASTER_VOICE_PROFILE}
-The user's project background is supplied separately. It also shows how the user writes. Take gentle cues from it, such as terminology and regional spelling, but keep the formal academic register and every rule above.`;
+The customer's project background is supplied separately as context for the document. You may follow its regional spelling and subject terminology, but the voice profile above governs the writing.`;
     }
 
     // ---------- Cover page details (from the customer's profile) ----------
@@ -349,6 +355,8 @@ The user's project background is supplied separately. It also shows how the user
         targetInstitution: target_institution,
         sourceMaterial: source_material,
         projectBackground,
+        whyYou,
+        whyNow,
         coverDetails,
       });
       maxTokens = 24000;

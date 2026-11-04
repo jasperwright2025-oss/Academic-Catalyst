@@ -1236,6 +1236,8 @@ export default function DashboardPage() {
   const [topic, setTopic] = useState("");
   const [institution, setInstitution] = useState("");
   const [sample, setSample] = useState("");
+  const [whyYou, setWhyYou] = useState("");
+  const [whyNow, setWhyNow] = useState("");
   const [showGuide, setShowGuide] = useState(false);
   const [uploadedProposal, setUploadedProposal] = useState("");
   const [uploadedFieldData, setUploadedFieldData] = useState("");
@@ -1369,7 +1371,7 @@ export default function DashboardPage() {
     }
 
     const totalBytes = new TextEncoder().encode(
-      [topic, institution, sample, uploadedProposal, uploadedFieldData].join("")
+      [topic, institution, sample, whyYou, whyNow, uploadedProposal, uploadedFieldData].join("")
     ).length;
     if (totalBytes > MAX_INPUT_BYTES) {
       setGenError(`Your input is too large. Please keep the total under ${Math.round(MAX_INPUT_BYTES / 1024)} KB.`);
@@ -1388,6 +1390,10 @@ export default function DashboardPage() {
       target_institution: institution.trim(),
       project_background: sample.trim(),
     };
+    if (action === "generate_proposal") {
+      payload.why_you = whyYou.trim();
+      payload.why_now = whyNow.trim();
+    }
     if (action !== "generate_proposal") payload.uploaded_proposal = uploadedProposal;
     if (action === "compile_dissertation") payload.uploaded_field_data = uploadedFieldData;
 
@@ -1671,6 +1677,47 @@ export default function DashboardPage() {
                   className={fieldClass}
                 />
               </div>
+
+              {action === "generate_proposal" && (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <label htmlFor="why_you" className="block text-sm font-medium text-slate-700">
+                      Why you <span className="font-normal text-slate-500">(optional)</span>
+                    </label>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Your own experience, position, access to the study site and reason for doing this study.
+                    </p>
+                    <textarea
+                      id="why_you"
+                      rows={4}
+                      maxLength={2000}
+                      value={whyYou}
+                      onChange={(e) => setWhyYou(e.target.value)}
+                      disabled={generating}
+                      placeholder="For example: I have taught this subject for six years and work with the schools in the study area."
+                      className={fieldClass}
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="why_now" className="block text-sm font-medium text-slate-700">
+                      Why now <span className="font-normal text-slate-500">(optional)</span>
+                    </label>
+                    <p className="mt-1 text-xs text-slate-500">
+                      What makes this study timely: a new policy, a recent problem, a gap you have noticed.
+                    </p>
+                    <textarea
+                      id="why_now"
+                      rows={4}
+                      maxLength={2000}
+                      value={whyNow}
+                      onChange={(e) => setWhyNow(e.target.value)}
+                      disabled={generating}
+                      placeholder="For example: the new curriculum was rolled out last year and no study has yet looked at its effect in rural schools."
+                      className={fieldClass}
+                    />
+                  </div>
+                </div>
+              )}
 
               <div aria-live="polite">
                 {genError && (
