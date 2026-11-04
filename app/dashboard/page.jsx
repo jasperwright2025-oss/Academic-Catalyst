@@ -1,9 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   generateDocument,
+  waitForJob,
+  getActiveJob,
+  isJobInProgress,
   getBillingStatus,
   listDocuments,
   getDocument,
@@ -1242,6 +1245,8 @@ export default function DashboardPage() {
   const [uploadedProposal, setUploadedProposal] = useState("");
   const [uploadedFieldData, setUploadedFieldData] = useState("");
   const [generating, setGenerating] = useState(false);
+  const [jobProgress, setJobProgress] = useState(null); // { stage_index, stage_count, stage_label }
+  const watchRef = useRef(null);
   const [genError, setGenError] = useState("");
   const [result, setResult] = useState(null);
   const [resultCopied, setResultCopied] = useState(false);
@@ -1292,6 +1297,39 @@ export default function DashboardPage() {
   useEffect(() => {
     refreshBilling();
   }, [refreshBilling]);
+
+  // If a document was still being written when the page was closed or refreshed, show its progress.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { job } = await getActiveJob();
+        if (cancelled || !job) return;
+        const match = ACTIONS.find((a) => a.value === job.action_type);
+        if (match) setAction(match.value);
+        setGenerating(true);
+        setJobProgress(job);
+        try {
+          await followJob(job.job_id, match?.label || "Document");
+        } catch (err) {
+          if (isUnauthorized(err)) goToLogin();
+          else if (err?.code !== "STOPPED") setGenError(err.message || "Generation failed. Please try again.");
+        } finally {
+          if (!cancelled) {
+            setGenerating(false);
+            setJobProgress(null);
+          }
+        }
+      } catch {
+        // No active job, or the check failed: nothing to resume.
+      }
+    })();
+    return () => {
+      cancelled = true;
+      if (watchRef.current) watchRef.current.stopped = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     refreshDocs(page, typeFilter);
@@ -1399,32 +1437,54 @@ export default function DashboardPage() {
 
     setGenerating(true);
     try {
-      const data = await generateDocument(payload);
-      setResult({
-        label: current.label,
-        locked: Boolean(data.locked),
-        text: data.locked ? data.preview : data.payload,
-        documentId: data.document_id,
-        sections: data.locked_sections || [],
-        totalWords: data.total_words || null,
-      });
-      setUnlockError("");
-      refreshBilling();
-      if (page !== 1) setPage(1);
-      else refreshDocs(1, typeFilter);
+      const started = await generateDocument(payload);
+      setJobProgress(started);
+      await followJob(started.job_id, current.label);
     } catch (err) {
       if (isUnauthorized(err)) {
         goToLogin();
       } else if (isPaywall(err)) {
         setPaywall({ target: err.data?.target || current.paywall });
+      } else if (isJobInProgress(err) && err.data?.job_id) {
+        // A document is already being written: show its progress instead.
+        setJobProgress({ stage_label: "Picking up your document in progress" });
+        try {
+          await followJob(err.data.job_id, current.label);
+        } catch (followErr) {
+          if (followErr?.code !== "STOPPED") setGenError(followErr.message || "Generation failed. Please try again.");
+        }
       } else if (isRateLimited(err)) {
         setGenError(err.message || "Please wait a few seconds before requesting another document.");
-      } else {
+      } else if (err?.code !== "STOPPED") {
         setGenError(err.message || "Generation failed. Please try again.");
       }
     } finally {
       setGenerating(false);
+      setJobProgress(null);
     }
+  }
+
+  // Follows a background job until it finishes, then shows the result.
+  async function followJob(jobId, label) {
+    if (watchRef.current) watchRef.current.stopped = true;
+    const signal = { stopped: false };
+    watchRef.current = signal;
+    const data = await waitForJob(jobId, {
+      stopSignal: signal,
+      onProgress: (job) => setJobProgress(job),
+    });
+    setResult({
+      label,
+      locked: Boolean(data.locked),
+      text: data.locked ? data.preview : data.payload,
+      documentId: data.document_id,
+      sections: data.locked_sections || [],
+      totalWords: data.total_words || null,
+    });
+    setUnlockError("");
+    refreshBilling();
+    if (page !== 1) setPage(1);
+    else refreshDocs(1, typeFilter);
   }
 
   async function handleDelete(doc) {
@@ -1733,13 +1793,47 @@ export default function DashboardPage() {
                 className="w-full rounded-lg bg-indigo-600 px-4 py-3 font-medium text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {generating
-                  ? "Generating... this can take a minute or two"
+                  ? "Writing your document..."
                   : billing?.can_generate?.[action] === false
                   ? "Unlock to generate"
                   : previewOnly
                   ? "Generate free preview"
                   : `Generate ${currentAction.label}`}
               </button>
+
+              {generating && jobProgress && (
+                <div aria-live="polite" className="rounded-xl border border-indigo-100 bg-indigo-50 p-4">
+                  <div className="flex items-center justify-between gap-3 text-sm">
+                    <span className="font-medium text-indigo-900">
+                      {jobProgress.stage_label || "Starting"}
+                      <span className="ml-1 inline-block animate-pulse">...</span>
+                    </span>
+                    {jobProgress.stage_count ? (
+                      <span className="shrink-0 text-xs text-indigo-700">
+                        Step {Math.min((jobProgress.stage_index ?? 0) + 1, jobProgress.stage_count)} of{" "}
+                        {jobProgress.stage_count}
+                      </span>
+                    ) : null}
+                  </div>
+                  {jobProgress.stage_count ? (
+                    <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-indigo-100">
+                      <div
+                        className="h-full rounded-full bg-indigo-600 transition-all duration-700"
+                        style={{
+                          width: `${Math.max(
+                            6,
+                            Math.round(((jobProgress.stage_index ?? 0) / jobProgress.stage_count) * 100)
+                          )}%`,
+                        }}
+                      />
+                    </div>
+                  ) : null}
+                  <p className="mt-3 text-xs text-indigo-800">
+                    A full document takes about 10 to 20 minutes, because every source is checked. You can leave this
+                    page: the work carries on, and the document appears in your history when it is ready.
+                  </p>
+                </div>
+              )}
             </form>
 
             {result && (
