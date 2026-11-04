@@ -30,3 +30,6 @@ create index if not exists generation_jobs_user_created_idx
 -- Row level security on, with no policies: signed-in users and visitors cannot read or change rows.
 alter table public.generation_jobs enable row level security;
 revoke all on public.generation_jobs from anon, authenticated;
+
+-- Reference check written for the customer, kept out of the document itself.
+alter table public.generation_jobs add column if not exists verification_note text;

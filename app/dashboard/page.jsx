@@ -758,6 +758,41 @@ function ExampleGuide({ onClose }) {
 // ---------------------------------------------------------------------------
 // Clarity note: a plain-language companion, shown apart from the document
 // ---------------------------------------------------------------------------
+function ReferenceCheckNote({ note }) {
+  const [copied, setCopied] = useState(false);
+  if (!note) return null;
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(note);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // The note is on screen, so it can still be copied by hand.
+    }
+  }
+
+  return (
+    <div className="mt-4 rounded-xl border border-sky-200 bg-sky-50 p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h4 className="text-sm font-semibold text-sky-900">Reference check (for you, not for submission)</h4>
+        <button
+          type="button"
+          onClick={copy}
+          className="rounded-md border border-sky-300 bg-white px-2.5 py-1 text-xs font-medium text-sky-900 hover:bg-sky-100"
+        >
+          {copied ? "Copied" : "Copy note"}
+        </button>
+      </div>
+      <p className="mt-1 text-xs text-sky-800">
+        What was checked about the references, and any entries to confirm by hand before you submit. It is not part
+        of the document and is left out of the Word download.
+      </p>
+      <div className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-slate-800">{note}</div>
+    </div>
+  );
+}
+
 function ClarityNote({ note }) {
   const [copied, setCopied] = useState(false);
   if (!note) return null;
@@ -1184,6 +1219,7 @@ function DocumentModal({ docId, onClose, onUnauthorized, onChanged, onPaywall, c
             <>
               <div className="whitespace-pre-wrap text-sm leading-relaxed text-slate-800">{parts.main}</div>
               <ClarityNote note={parts.note} />
+              <ReferenceCheckNote note={parts.verification} />
             </>
           )}
         </div>
@@ -1898,6 +1934,7 @@ export default function DashboardPage() {
                       {splitClarity(result.text).main}
                     </div>
                     <ClarityNote note={splitClarity(result.text).note} />
+                    <ReferenceCheckNote note={splitClarity(result.text).verification} />
                   </>
                 )}
               </div>
