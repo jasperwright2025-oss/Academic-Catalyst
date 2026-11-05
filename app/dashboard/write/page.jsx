@@ -27,6 +27,7 @@ import {
   PAYWALL_OFFERS,
   listProjects,
 } from "@/lib/api/client";
+import FileUpload from "@/components/app/FileUpload";
 import ReportLink from "@/components/app/ReportLink";
 import { splitClarity } from "@/lib/documents/clarity";
 import CoverDetailsPanel from "@/components/CoverDetailsPanel";
@@ -1288,6 +1289,7 @@ export default function DashboardPage() {
   const [showGuide, setShowGuide] = useState(false);
   const [uploadedProposal, setUploadedProposal] = useState("");
   const [uploadedFieldData, setUploadedFieldData] = useState("");
+  const [uploadedTranscripts, setUploadedTranscripts] = useState("");
   const [generating, setGenerating] = useState(false);
   const [jobProgress, setJobProgress] = useState(null); // { stage_index, stage_count, stage_label }
   const watchRef = useRef(null);
@@ -1488,7 +1490,7 @@ export default function DashboardPage() {
     }
 
     const totalBytes = new TextEncoder().encode(
-      [topic, institution, sample, whyYou, whyNow, uploadedProposal, uploadedFieldData].join("")
+      [topic, institution, sample, whyYou, whyNow, uploadedProposal, uploadedFieldData, uploadedTranscripts].join("")
     ).length;
     if (totalBytes > MAX_INPUT_BYTES) {
       setGenError(
@@ -1516,7 +1518,10 @@ export default function DashboardPage() {
       payload.why_now = whyNow.trim();
     }
     if (action !== "generate_proposal") payload.uploaded_proposal = uploadedProposal;
-    if (action === "compile_dissertation") payload.uploaded_field_data = uploadedFieldData;
+    if (action === "compile_dissertation") {
+      payload.uploaded_field_data = uploadedFieldData;
+      if (uploadedTranscripts.trim()) payload.uploaded_transcripts = uploadedTranscripts;
+    }
 
     setGenerating(true);
     try {
@@ -1787,13 +1792,14 @@ export default function DashboardPage() {
                   <label htmlFor="uploaded_proposal" className="block text-sm font-medium text-slate-700">
                     Approved research proposal <span className="text-red-600">*</span>
                   </label>
+                  <FileUpload value={uploadedProposal} onChange={setUploadedProposal} disabled={generating} label="Upload your proposal" />
                   <textarea
                     id="uploaded_proposal"
                     rows={6}
                     value={uploadedProposal}
                     onChange={(e) => setUploadedProposal(e.target.value)}
                     disabled={generating}
-                    placeholder="Paste the full text of your proposal."
+                    placeholder="Paste the full text of your proposal, or upload it above."
                     className={fieldClass}
                   />
                 </div>
@@ -1804,13 +1810,32 @@ export default function DashboardPage() {
                   <label htmlFor="uploaded_field_data" className="block text-sm font-medium text-slate-700">
                     Field notes and data sets <span className="text-red-600">*</span>
                   </label>
+                  <FileUpload value={uploadedFieldData} onChange={setUploadedFieldData} disabled={generating} multiple label="Upload data files" />
                   <textarea
                     id="uploaded_field_data"
                     rows={6}
                     value={uploadedFieldData}
                     onChange={(e) => setUploadedFieldData(e.target.value)}
                     disabled={generating}
-                    placeholder="Paste your collected data and field notes."
+                    placeholder="Paste your collected data and field notes, or upload one or more files above."
+                    className={fieldClass}
+                  />
+                </div>
+              )}
+
+              {action === "compile_dissertation" && (
+                <div>
+                  <label htmlFor="uploaded_transcripts" className="block text-sm font-medium text-slate-700">
+                    Interview or focus group transcripts <span className="font-normal text-slate-500">(optional)</span>
+                  </label>
+                  <FileUpload value={uploadedTranscripts} onChange={setUploadedTranscripts} disabled={generating} multiple label="Upload transcripts" />
+                  <textarea
+                    id="uploaded_transcripts"
+                    rows={5}
+                    value={uploadedTranscripts}
+                    onChange={(e) => setUploadedTranscripts(e.target.value)}
+                    disabled={generating}
+                    placeholder="If your study has qualitative data, add the transcripts here so the findings can quote participants."
                     className={fieldClass}
                   />
                 </div>
