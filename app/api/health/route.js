@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { AI_PAUSED_MESSAGE } from "@/lib/generation/aiLimit";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 20;
@@ -42,6 +43,13 @@ export async function GET() {
         .select("id", { head: true, count: "exact" })
         .eq("status", "failed")
         .gte("updated_at", new Date(now - 60 * 60 * 1000).toISOString());
+      const { count: aiPaused } = await admin
+        .from("generation_jobs")
+        .select("id", { head: true, count: "exact" })
+        .eq("status", "failed")
+        .eq("error", AI_PAUSED_MESSAGE)
+        .gte("updated_at", new Date(now - 60 * 60 * 1000).toISOString());
+      checks.ai_writing = aiPaused ? "stopped: AI usage limit reached" : "ok";
       checks.stuck_documents = stuck ?? 0;
       checks.failed_documents_last_hour = failed ?? 0;
     }
@@ -49,7 +57,7 @@ export async function GET() {
     checks.database = "error";
   }
 
-  const down = !databaseOk || missing.length > 0;
+  const down = !databaseOk || missing.length > 0 || String(checks.ai_writing || "").startsWith("stopped");
   const degraded = !down && (checks.stuck_documents > 0 || checks.failed_documents_last_hour > 2);
   const status = down ? "down" : degraded ? "degraded" : "ok";
 

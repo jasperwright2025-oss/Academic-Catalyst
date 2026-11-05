@@ -1,3 +1,4 @@
+import { isAiLimitError, alertAiLimit, AI_PAUSED_MESSAGE } from "@/lib/generation/aiLimit";
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -187,6 +188,11 @@ export async function POST(request, { params }) {
         { error: "SEARCH_UNAVAILABLE", message: "The study search is unavailable right now. Nothing was counted. Please try again shortly." },
         { status: 503 }
       );
+    }
+    if (isAiLimitError(err)) {
+      await alertAiLimit(admin, err);
+      console.error("Tool run error: AI usage limit reached", tool);
+      return NextResponse.json({ error: "AI_PAUSED", message: AI_PAUSED_MESSAGE.replace("You have not been charged", "Nothing was counted") }, { status: 503 });
     }
     console.error("Tool run error:", tool, err?.status, err?.message);
     return NextResponse.json(
