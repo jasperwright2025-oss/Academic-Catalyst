@@ -5,8 +5,9 @@ import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { getTool, runToolRequest, listProjects, isUnauthorized, isLimitReached } from "@/lib/api/client";
 import { serviceBySlug } from "@/lib/site/content";
+import LiteratureTool from "@/components/app/LiteratureTool";
 
-const LIVE = ["topic-validator", "smart-objectives", "methodology"];
+const LIVE = ["topic-validator", "smart-objectives", "literature-review", "methodology"];
 const LEVELS = ["Master's", "PhD", "Undergraduate", "Postgraduate diploma", "Professional or workplace study"];
 const APPROACHES = ["No preference", "Quantitative", "Qualitative", "Mixed methods"];
 const WAIT_MESSAGES = {
@@ -92,6 +93,8 @@ function ToolPage() {
       </main>
     );
   }
+
+  if (slug === "literature-review") return <LiteratureTool service={service} />;
 
   const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
 
@@ -459,10 +462,10 @@ function ObjectivesResult({ run }) {
       </ol>
 
       <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl bg-ink px-6 py-5 text-white">
-        <p className="text-[15px]">Next, plan how you will collect and analyse the data for these objectives.</p>
+        <p className="text-[15px]">Next, see what the published evidence says about these objectives.</p>
         <div className="flex flex-wrap gap-2.5">
-          <Link href={`/dashboard/tools/methodology?project=${run.project_id || ""}`} className="rounded-full bg-white px-5 py-3 text-sm font-semibold text-ink">Plan the methodology</Link>
-          <Link href={`/dashboard/write?project=${run.project_id || ""}`} className="rounded-full border border-white/40 px-5 py-3 text-sm font-semibold text-white">Skip to the full proposal</Link>
+          <Link href={`/dashboard/tools/literature-review?project=${run.project_id || ""}`} className="rounded-full bg-white px-5 py-3 text-sm font-semibold text-ink">Map the literature</Link>
+          <Link href={`/dashboard/tools/methodology?project=${run.project_id || ""}`} className="rounded-full border border-white/40 px-5 py-3 text-sm font-semibold text-white">Plan the methodology</Link>
         </div>
       </div>
     </div>

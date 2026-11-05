@@ -6,13 +6,15 @@ import { runTool, ToolOutputError } from "@/lib/tools/run";
 import { WebSearchUnavailableError } from "@/lib/generation/claude";
 import { sampleSizes } from "@/lib/tools/sampleSize";
 import { objectivesText } from "@/lib/tools/projectText";
+import { getWorks } from "@/lib/tools/openalex";
+import { apaReference, inTextCitation } from "@/lib/tools/references";
 
 
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
-const LIVE_TOOLS = ["topic_validator", "smart_objectives", "methodology"];
+const LIVE_TOOLS = ["topic_validator", "smart_objectives", "methodology", "literature_review"];
 const clip = (v, n) => String(v ?? "").trim().slice(0, n);
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -85,7 +87,7 @@ export async function POST(request, { params }) {
     input.confidence = [90, 95, 99].includes(Number(body.confidence)) ? Number(body.confidence) : 95;
     input.margin = [0.03, 0.05, 0.1].includes(Number(body.margin)) ? Number(body.margin) : 0.05;
   }
-  if (input.topic.length < 10) {
+  if (input.topic.length < (tool === "literature_review" ? 3 : 10)) {
     return NextResponse.json(
       { error: "BAD_REQUEST", message: "Please describe your topic in at least a few words." },
       { status: 400 }
@@ -121,6 +123,32 @@ export async function POST(request, { params }) {
     projectId = created?.id ?? null;
   }
 
+  // Literature review: fetch the chosen papers from the database again, so their details cannot be altered.
+  let papers = null;
+  if (tool === "literature_review") {
+    const ids = Array.isArray(body.paper_ids) ? body.paper_ids.map(String) : [];
+    if (ids.length < 2) {
+      return NextResponse.json({ error: "BAD_REQUEST", message: "Please choose at least two studies to summarise." }, { status: 400 });
+    }
+    try {
+      papers = await getWorks(ids.slice(0, 15));
+    } catch (err) {
+      console.error("Literature fetch error:", err?.status, err?.message);
+      return NextResponse.json(
+        { error: "SEARCH_UNAVAILABLE", message: "The research database did not respond. Nothing was counted. Please try again." },
+        { status: 503 }
+      );
+    }
+    if (papers.length < 2) {
+      return NextResponse.json({ error: "BAD_REQUEST", message: "Those studies could not be found. Please search again." }, { status: 400 });
+    }
+    papers = papers.map((p, i) => ({ ...p, key: `P${i + 1}` }));
+    input.paper_ids = papers.map((p) => p.id);
+    input.papers_text = papers
+      .map((p) => `[${p.key}] ${p.title} (${p.year || "n.d."}; ${p.journal || p.type}; cited ${p.cited_by} times)\nAbstract: ${p.abstract || "No abstract available."}`)
+      .join("\n\n");
+  }
+
   // Methodology: use the project's saved objectives when none were typed, and calculate the sample size in code.
   let calculation = null;
   if (tool === "methodology") {
@@ -147,6 +175,10 @@ export async function POST(request, { params }) {
   try {
     ({ output } = await runTool(tool, input, { deadlineMs: startedAt + 270 * 1000 }));
     if (calculation) output.sample_size = calculation;
+    // References come from the database records, built in code.
+    if (papers) {
+      output.papers = papers.map((p) => ({ ...p, citation: inTextCitation(p), reference: apaReference(p) }));
+    }
   } catch (err) {
     if (err instanceof WebSearchUnavailableError) {
       return NextResponse.json(
@@ -166,7 +198,7 @@ export async function POST(request, { params }) {
 
   const { data: run, error: runErr } = await admin
     .from("tool_runs")
-    .insert({ user_id: user.id, project_id: projectId, tool, input, output })
+    .insert({ user_id: user.id, project_id: projectId, tool, input: { ...input, papers_text: undefined }, output })
     .select("id, project_id, input, output, created_at")
     .single();
   if (runErr) console.error("Tool run save error:", runErr);

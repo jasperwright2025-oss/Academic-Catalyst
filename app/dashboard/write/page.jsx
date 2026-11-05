@@ -1705,6 +1705,7 @@ export default function DashboardPage() {
                     const p = projects.find((x) => x.id === projectId);
                     const used = [
                       p?.latest?.smart_objectives && "your objectives",
+                      p?.latest?.literature_review && "the studies you selected",
                       p?.latest?.methodology && "your methodology plan",
                     ].filter(Boolean);
                     return (
