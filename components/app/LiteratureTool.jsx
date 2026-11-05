@@ -66,12 +66,12 @@ export default function LiteratureTool({ service }) {
       .catch(() => {});
   }, [router]);
 
-  // A project fills the search with its first research question, or its topic.
+  // A project fills the search with its chosen title, which covers the whole study; the search turns it into key words.
   const project = useMemo(() => projects.find((p) => p.id === projectId), [projects, projectId]);
   useEffect(() => {
     if (!project) return;
     const rq = project.latest?.smart_objectives?.output?.objectives?.[0]?.research_question;
-    setQuery(rq || project.topic || project.title || "");
+    setQuery(project.topic || project.title || rq || "");
   }, [project]);
 
   async function runSearch(event) {

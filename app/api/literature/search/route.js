@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { searchWorks } from "@/lib/tools/openalex";
+import { smartSearch } from "@/lib/tools/openalex";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 /**
  * GET /api/literature/search?q=...&from=2015&oa=1&reviews=1
@@ -23,7 +24,7 @@ export async function GET(request) {
   }
   const from = Number(url.searchParams.get("from"));
   try {
-    const result = await searchWorks(q, {
+    const result = await smartSearch(q, {
       fromYear: from >= 1950 && from <= new Date().getFullYear() ? from : undefined,
       openAccessOnly: url.searchParams.get("oa") === "1",
       reviewsOnly: url.searchParams.get("reviews") === "1",
