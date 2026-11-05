@@ -45,6 +45,7 @@ export default function LiteratureTool({ service }) {
   const [reviewsOnly, setReviewsOnly] = useState(false);
   const [results, setResults] = useState(null);
   const [total, setTotal] = useState(0);
+  const [searchNote, setSearchNote] = useState("");
   const [selected, setSelected] = useState(new Map());
   const [searching, setSearching] = useState(false);
   const [summarising, setSummarising] = useState(false);
@@ -85,6 +86,9 @@ export default function LiteratureTool({ service }) {
       const data = await searchLiterature(query.trim(), { from: fromYear, oa: oaOnly, reviews: reviewsOnly });
       setResults(data.papers || []);
       setTotal(data.total || 0);
+      setSearchNote(
+        [data.searched_for ? `Searched for: ${data.searched_for}.` : "", data.broadened || ""].filter(Boolean).join(" ")
+      );
     } catch (err) {
       if (isUnauthorized(err)) router.push("/login");
       else setError(err.message || "The search did not work. Please try again.");
@@ -158,7 +162,7 @@ export default function LiteratureTool({ service }) {
           <div>
             <label htmlFor="q" className="block text-sm font-semibold">Research question or key words</label>
             <input id="q" type="search" maxLength={300} value={query} onChange={(e) => setQuery(e.target.value)} className={field}
-              placeholder="For example: mobile money and saving among small traders" />
+              placeholder="For example: mobile money saving small traders" />
           </div>
         </div>
         <div className="mt-4 flex flex-wrap items-end gap-5">
@@ -200,6 +204,7 @@ export default function LiteratureTool({ service }) {
           <h2 id="results" className="text-sm font-semibold text-muted">
             {results.length ? `Showing the ${results.length} most relevant of ${total.toLocaleString()} works found` : "No works found. Try fewer or broader key words."}
           </h2>
+          {searchNote && <p className="mt-1 text-xs text-muted">{searchNote} Tip: three to six key words usually work best.</p>}
           <ul className="mt-3 space-y-3">
             {results.map((p) => {
               const on = selected.has(p.id);
