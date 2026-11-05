@@ -27,6 +27,7 @@ import {
   PAYWALL_OFFERS,
   listProjects,
 } from "@/lib/api/client";
+import ReportLink from "@/components/app/ReportLink";
 import { splitClarity } from "@/lib/documents/clarity";
 import CoverDetailsPanel from "@/components/CoverDetailsPanel";
 
@@ -1891,7 +1892,7 @@ export default function DashboardPage() {
               <div aria-live="polite">
                 {genError && (
                   <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
-                    {genError}
+                    {genError} <ReportLink error={genError} topic="document" />
                   </p>
                 )}
               </div>

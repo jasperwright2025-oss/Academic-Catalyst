@@ -7,6 +7,7 @@ import { getTool, runToolRequest, listProjects, isUnauthorized, isLimitReached }
 import { serviceBySlug } from "@/lib/site/content";
 import LiteratureTool from "@/components/app/LiteratureTool";
 import UnlockBox from "@/components/app/UnlockBox";
+import ReportLink from "@/components/app/ReportLink";
 
 const LIVE = ["topic-validator", "smart-objectives", "literature-review", "methodology"];
 const LEVELS = ["Master's", "PhD", "Undergraduate", "Postgraduate diploma", "Professional or workplace study"];
@@ -242,7 +243,7 @@ function ToolPage() {
           </div>
 
           <div aria-live="polite">
-            {error && <p role="alert" className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
+            {error && <p role="alert" className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{error} <ReportLink error={error} topic="tools" /></p>}
             {limitHit && (
               <div role="alert" className="rounded-xl bg-sand px-4 py-3 text-sm text-[#7A4A0C]">
                 You have used this month&apos;s free uses of this tool. They reset on the 1st of next month, or{" "}

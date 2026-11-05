@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { getTool, runToolRequest, listProjects, searchLiterature, isUnauthorized, isLimitReached } from "@/lib/api/client";
 import { risExport, bibtexExport } from "@/lib/tools/references";
 import UnlockBox from "@/components/app/UnlockBox";
+import ReportLink from "@/components/app/ReportLink";
 
 const MAX_SELECTED = 15;
 const field =
@@ -189,7 +190,7 @@ export default function LiteratureTool({ service }) {
           </button>
         </div>
         <div aria-live="polite">
-          {error && <p role="alert" className="mt-4 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
+          {error && <p role="alert" className="mt-4 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{error} <ReportLink error={error} topic="search" /></p>}
           {limitHit && (
             <p role="alert" className="mt-4 rounded-xl bg-sand px-4 py-3 text-sm text-[#7A4A0C]">
               You have used this month&apos;s free summaries. Searching stays free. They reset on the 1st, or{" "}
@@ -204,6 +205,12 @@ export default function LiteratureTool({ service }) {
           <h2 id="results" className="text-sm font-semibold text-muted">
             {results.length ? `Showing the ${results.length} most relevant of ${total.toLocaleString()} works found` : "No works found. Try fewer or broader key words."}
           </h2>
+          {results.length < 2 && (
+            <p className="mt-2 rounded-xl bg-sand px-4 py-3 text-sm text-[#7A4A0C]">
+              Too few studies to summarise. Try three to six key words without place names, for example: mobile money saving market traders.
+              Still stuck? <ReportLink error={`Search returned ${results.length} studies for: ${query}`} topic="search" />
+            </p>
+          )}
           {searchNote && <p className="mt-1 text-xs text-muted">{searchNote} Tip: three to six key words usually work best.</p>}
           <ul className="mt-3 space-y-3">
             {results.map((p) => {
