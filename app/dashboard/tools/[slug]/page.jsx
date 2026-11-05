@@ -6,12 +6,13 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { getTool, runToolRequest, listProjects, isUnauthorized, isLimitReached } from "@/lib/api/client";
 import { serviceBySlug } from "@/lib/site/content";
 
-const LIVE = ["topic-validator", "smart-objectives"];
+const LIVE = ["topic-validator", "smart-objectives", "methodology"];
 const LEVELS = ["Master's", "PhD", "Undergraduate", "Postgraduate diploma", "Professional or workplace study"];
 const APPROACHES = ["No preference", "Quantitative", "Qualitative", "Mixed methods"];
 const WAIT_MESSAGES = {
   "topic-validator": ["Searching published studies", "Comparing your topic with existing work", "Scoring clarity, originality, relevance and feasibility", "Drafting stronger titles"],
   "smart-objectives": ["Reading your topic", "Drafting objectives", "Testing each one against SMART", "Matching research questions and methods"],
+  methodology: ["Calculating your sample size", "Choosing the design", "Planning instruments and analysis", "Checking validity and ethics"],
 };
 
 const field =
@@ -34,6 +35,11 @@ function ToolPage() {
     notes: "",
     approach: "No preference",
     timeframe: "",
+    objectives: "",
+    population_description: "",
+    population: "",
+    confidence: "95",
+    margin: "0.05",
   });
   const [running, setRunning] = useState(false);
   const [waitIndex, setWaitIndex] = useState(0);
@@ -63,6 +69,7 @@ function ToolPage() {
       topic: project.topic || project.title || f.topic,
       level: project.level || f.level,
       institution: project.institution || f.institution,
+      objectives: objectivesFromRun(project.latest?.smart_objectives?.output) || f.objectives,
     }));
   }, [project, search]);
 
@@ -182,6 +189,46 @@ function ToolPage() {
               </div>
             </div>
           )}
+          {slug === "methodology" && (
+            <>
+              <div>
+                <label htmlFor="objectives" className="block text-sm font-semibold">Your objectives</label>
+                <textarea id="objectives" rows={5} maxLength={4000} value={form.objectives} onChange={set("objectives")} disabled={running} className={field}
+                  placeholder="Paste your objectives, or choose a project that has them. If left empty, objectives will be drafted from your topic." />
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label htmlFor="approach" className="block text-sm font-semibold">Approach</label>
+                  <select id="approach" value={form.approach} onChange={set("approach")} disabled={running} className={field}>
+                    {APPROACHES.map((a) => <option key={a}>{a}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor="population" className="block text-sm font-semibold">Population size (N) <span className="font-normal text-muted">(if known)</span></label>
+                  <input id="population" type="text" inputMode="numeric" value={form.population} onChange={set("population")} disabled={running} className={field} placeholder="For example: 1200" />
+                </div>
+              </div>
+              <div>
+                <label htmlFor="population_description" className="block text-sm font-semibold">Who is in the population?</label>
+                <textarea id="population_description" rows={2} maxLength={1000} value={form.population_description} onChange={set("population_description")} disabled={running} className={field}
+                  placeholder="For example: registered vendors in Mbale Central Market, plus market leaders and city officials as key informants." />
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label htmlFor="confidence" className="block text-sm font-semibold">Confidence level</label>
+                  <select id="confidence" value={form.confidence} onChange={set("confidence")} disabled={running} className={field}>
+                    <option value="90">90%</option><option value="95">95% (usual)</option><option value="99">99%</option>
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor="margin" className="block text-sm font-semibold">Margin of error</label>
+                  <select id="margin" value={form.margin} onChange={set("margin")} disabled={running} className={field}>
+                    <option value="0.03">3%</option><option value="0.05">5% (usual)</option><option value="0.1">10%</option>
+                  </select>
+                </div>
+              </div>
+            </>
+          )}
           <div>
             <label htmlFor="notes" className="block text-sm font-semibold">
               {slug === "topic-validator" ? "Setting and access" : "Anything else"} <span className="font-normal text-muted">(optional)</span>
@@ -201,9 +248,9 @@ function ToolPage() {
           </div>
 
           <button type="submit" disabled={running} className="w-full rounded-full bg-brand px-5 py-3.5 text-base font-semibold text-white transition hover:bg-brand-dark disabled:cursor-wait disabled:opacity-70">
-            {running ? `${(WAIT_MESSAGES[slug] || ["Working"])[waitIndex]}...` : slug === "topic-validator" ? "Check my topic" : "Build my objectives"}
+            {running ? `${(WAIT_MESSAGES[slug] || ["Working"])[waitIndex]}...` : { "topic-validator": "Check my topic", "smart-objectives": "Build my objectives", methodology: "Plan my methodology" }[slug]}
           </button>
-          {running && <p className="text-center text-xs text-muted">This usually takes {slug === "topic-validator" ? "one to two minutes" : "under a minute"}. Please keep this page open.</p>}
+          {running && <p className="text-center text-xs text-muted">This usually takes {slug === "smart-objectives" ? "under a minute" : "one to two minutes"}. Please keep this page open.</p>}
         </form>
 
         <aside className="min-w-0 flex-[1_1_280px] space-y-4">
@@ -236,6 +283,8 @@ function ToolPage() {
         <section id="result" className="mt-8 scroll-mt-6">
           {slug === "topic-validator" ? (
             <TopicResult run={result} onUseTitle={(title) => router.push(`/dashboard/tools/smart-objectives?project=${result.project_id || ""}&topic=${encodeURIComponent(title)}`)} />
+          ) : slug === "methodology" ? (
+            <MethodologyResult run={result} />
           ) : (
             <ObjectivesResult run={result} />
           )}
@@ -335,6 +384,11 @@ const SMART_LETTERS = [
   ["time_bound", "T"],
 ];
 
+function objectivesFromRun(o) {
+  if (!o?.objectives?.length) return "";
+  return o.objectives.map((x, i) => `${i + 1}. ${x.objective}`).join("\n");
+}
+
 function objectivesAsText(o) {
   const lines = [`General objective: ${o.general_objective}`, "", "Specific objectives:"];
   (o.objectives || []).forEach((x, i) => {
@@ -405,8 +459,116 @@ function ObjectivesResult({ run }) {
       </ol>
 
       <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl bg-ink px-6 py-5 text-white">
-        <p className="text-[15px]">{o.next_step || "Next, turn these objectives into a full research proposal."}</p>
-        <Link href="/dashboard/write" className="rounded-full bg-white px-5 py-3 text-sm font-semibold text-ink">Write the full proposal</Link>
+        <p className="text-[15px]">Next, plan how you will collect and analyse the data for these objectives.</p>
+        <div className="flex flex-wrap gap-2.5">
+          <Link href={`/dashboard/tools/methodology?project=${run.project_id || ""}`} className="rounded-full bg-white px-5 py-3 text-sm font-semibold text-ink">Plan the methodology</Link>
+          <Link href={`/dashboard/write?project=${run.project_id || ""}`} className="rounded-full border border-white/40 px-5 py-3 text-sm font-semibold text-white">Skip to the full proposal</Link>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Block({ title, children }) {
+  return (
+    <div className="rounded-2xl border border-line bg-white p-6">
+      <h3 className="font-bold">{title}</h3>
+      <div className="mt-2.5 text-[15px] leading-relaxed text-ink-soft">{children}</div>
+    </div>
+  );
+}
+
+function MethodologyResult({ run }) {
+  const o = run.output;
+  const calc = o.sample_size;
+  return (
+    <div className="space-y-5">
+      <h2 className="font-serif text-2xl font-medium">Your methodology plan</h2>
+
+      {calc && (
+        <div className="rounded-2xl bg-mint p-6">
+          <div className="flex flex-wrap items-baseline justify-between gap-3">
+            <h3 className="font-bold">Sample size</h3>
+            <p className="font-serif text-3xl">{calc.recommended.n}<span className="ml-2 font-sans text-sm text-brand-dark">recommended</span></p>
+          </div>
+          <p className="mt-1 text-sm text-brand-dark">
+            Population {calc.inputs.population ? calc.inputs.population.toLocaleString() : "large or unknown"}, {calc.inputs.confidence}% confidence,
+            {" "}{calc.inputs.margin * 100}% margin of error, p = {calc.inputs.p}. Calculated exactly, not estimated.
+          </p>
+          <div className="mt-4 grid gap-3 md:grid-cols-3">
+            {calc.methods.map((m) => (
+              <div key={m.name} className="rounded-xl bg-white p-4">
+                <p className="text-sm font-semibold">{m.name}</p>
+                <p className="mt-1 font-serif text-2xl">n = {m.n}</p>
+                <p className="mt-2 text-xs text-muted">{m.formula}</p>
+                <p className="mt-1 break-words text-xs text-ink-soft">{m.working}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="grid gap-5 md:grid-cols-2">
+        <Block title="Research philosophy">{o.philosophy}</Block>
+        <Block title="Approach and design">{o.approach_and_design}</Block>
+        <Block title="Study area">{o.study_area}</Block>
+        <Block title="Population">{o.population}</Block>
+      </div>
+
+      <Block title="Sampling">
+        <p>{o.sampling}</p>
+        {(o.sample_breakdown || []).length > 0 && (
+          <div className="mt-4 overflow-x-auto">
+            <table className="w-full min-w-[420px] border-collapse text-sm">
+              <thead><tr className="text-left text-muted"><th scope="col" className="border-b border-line py-2 pr-4 font-semibold">Group</th><th scope="col" className="border-b border-line py-2 pr-4 font-semibold">Number</th><th scope="col" className="border-b border-line py-2 font-semibold">How they are chosen</th></tr></thead>
+              <tbody>
+                {o.sample_breakdown.map((g) => (
+                  <tr key={g.group}><td className="border-b border-[#F0F0EA] py-2 pr-4 font-medium text-ink">{g.group}</td><td className="border-b border-[#F0F0EA] py-2 pr-4">{g.number}</td><td className="border-b border-[#F0F0EA] py-2">{g.selection}</td></tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Block>
+
+      <Block title="Instruments">
+        <ul className="space-y-2">
+          {(o.instruments || []).map((x) => (
+            <li key={x.instrument}><span className="font-semibold text-ink">{x.instrument}</span> <span className="text-muted">(objectives {x.for_objectives})</span>: {x.description}</li>
+          ))}
+        </ul>
+        {o.procedure && <p className="mt-3">{o.procedure}</p>}
+      </Block>
+
+      <Block title="Analysis by objective">
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[520px] border-collapse text-sm">
+            <thead><tr className="text-left text-muted"><th scope="col" className="border-b border-line py-2 pr-4 font-semibold">Objective</th><th scope="col" className="border-b border-line py-2 pr-4 font-semibold">Method</th><th scope="col" className="border-b border-line py-2 pr-4 font-semibold">Software</th><th scope="col" className="border-b border-line py-2 font-semibold">What it shows</th></tr></thead>
+            <tbody>
+              {(o.analysis || []).map((a) => (
+                <tr key={a.objective}><td className="border-b border-[#F0F0EA] py-2 pr-4 text-ink">{a.objective}</td><td className="border-b border-[#F0F0EA] py-2 pr-4">{a.method}</td><td className="border-b border-[#F0F0EA] py-2 pr-4">{a.software}</td><td className="border-b border-[#F0F0EA] py-2">{a.output}</td></tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Block>
+
+      <div className="grid gap-5 md:grid-cols-2">
+        <Block title="Validity and reliability">{o.validity_reliability}</Block>
+        <Block title="Ethics">
+          <ul className="space-y-1.5">{(o.ethics || []).map((e) => <li key={e}>· {e}</li>)}</ul>
+        </Block>
+      </div>
+
+      <Block title="Limitations and how they are handled">
+        <ul className="space-y-2">
+          {(o.limitations || []).map((l) => <li key={l.limitation}><span className="font-semibold text-ink">{l.limitation}</span> {l.mitigation}</li>)}
+        </ul>
+      </Block>
+
+      <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl bg-ink px-6 py-5 text-white">
+        <p className="text-[15px]">Your title, objectives and this plan are saved to the project. Turn them into a full proposal.</p>
+        <Link href={`/dashboard/write?project=${run.project_id || ""}`} className="rounded-full bg-white px-5 py-3 text-sm font-semibold text-ink">Write the full proposal</Link>
       </div>
     </div>
   );

@@ -5,6 +5,7 @@ import { FREE_PREVIEW_LIMIT } from '@/lib/documents/preview';
 import { normalizeSubscription } from '@/lib/payments/plan';
 import { stagesFor } from '@/lib/generation/stages';
 import { kickJob, ACTIVE_STATUSES } from '@/lib/generation/runner';
+import { planningWork } from '@/lib/tools/projectText';
 
 // This route only checks the request and starts a background job, so it answers in seconds.
 // The writing itself happens in /api/jobs/run, one stage at a time.
@@ -249,6 +250,16 @@ export async function POST(request) {
         }),
       },
     };
+
+    // A project from the planning tools: its title, objectives and methodology go into the proposal.
+    const projectId = /^[0-9a-f-]{36}$/i.test(String(body.project_id || '')) ? body.project_id : null;
+    if (projectId) {
+      const work = await planningWork(supabase, userId, projectId);
+      if (work) {
+        input.project_id = work.project.id;
+        if (action_type === 'generate_proposal') input.planning_work = work.text;
+      }
+    }
 
     const stages = stagesFor(action_type);
     const { data: job, error: jobErr } = await admin

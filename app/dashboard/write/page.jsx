@@ -25,6 +25,7 @@ import {
   isPaywall,
   isRateLimited,
   PAYWALL_OFFERS,
+  listProjects,
 } from "@/lib/api/client";
 import { splitClarity } from "@/lib/documents/clarity";
 import CoverDetailsPanel from "@/components/CoverDetailsPanel";
@@ -1277,6 +1278,9 @@ export default function DashboardPage() {
   const [action, setAction] = useState("generate_proposal");
   const [topic, setTopic] = useState("");
   const [institution, setInstitution] = useState("");
+  // A project from the planning tools (/dashboard/write?project=...): its work goes into the proposal.
+  const [projects, setProjects] = useState([]);
+  const [projectId, setProjectId] = useState("");
   const [sample, setSample] = useState("");
   const [whyYou, setWhyYou] = useState("");
   const [whyNow, setWhyNow] = useState("");
@@ -1373,6 +1377,32 @@ export default function DashboardPage() {
   useEffect(() => {
     refreshDocs(page, typeFilter);
   }, [page, typeFilter, refreshDocs]);
+
+  // Projects from the planning tools; ?project=... preselects one and fills in its title.
+  useEffect(() => {
+    listProjects()
+      .then((d) => {
+        const list = d.projects || [];
+        setProjects(list);
+        const wanted = new URLSearchParams(window.location.search).get("project");
+        const chosen = list.find((p) => p.id === wanted);
+        if (chosen) {
+          setProjectId(chosen.id);
+          setTopic(chosen.topic || chosen.title || "");
+          if (chosen.institution) setInstitution(chosen.institution);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  function chooseProject(id) {
+    setProjectId(id);
+    const chosen = projects.find((p) => p.id === id);
+    if (chosen) {
+      setTopic(chosen.topic || chosen.title || "");
+      if (chosen.institution) setInstitution(chosen.institution);
+    }
+  }
 
   // The side menu's "Buy credits" link opens the payment window: /dashboard/write?buy=1
   useEffect(() => {
@@ -1476,6 +1506,7 @@ export default function DashboardPage() {
       target_institution: institution.trim(),
       project_background: sample.trim(),
     };
+    if (projectId) payload.project_id = projectId;
     if (action === "generate_proposal") {
       payload.why_you = whyYou.trim();
       payload.why_now = whyNow.trim();
@@ -1651,6 +1682,41 @@ export default function DashboardPage() {
             <p className="mt-1 text-sm text-slate-600">Choose what you would like to produce.</p>
 
             <form onSubmit={handleGenerate} className="mt-5 space-y-5" noValidate>
+              {projects.length > 0 && (
+                <div>
+                  <label htmlFor="project" className="block text-sm font-medium text-slate-700">
+                    Project <span className="font-normal text-slate-500">(optional)</span>
+                  </label>
+                  <select
+                    id="project"
+                    value={projectId}
+                    onChange={(e) => chooseProject(e.target.value)}
+                    disabled={generating}
+                    className={fieldClass}
+                  >
+                    <option value="">No project: start from scratch</option>
+                    {projects.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.title.length > 80 ? `${p.title.slice(0, 80)}...` : p.title}
+                      </option>
+                    ))}
+                  </select>
+                  {projectId && (() => {
+                    const p = projects.find((x) => x.id === projectId);
+                    const used = [
+                      p?.latest?.smart_objectives && "your objectives",
+                      p?.latest?.methodology && "your methodology plan",
+                    ].filter(Boolean);
+                    return (
+                      <p className="mt-1.5 rounded-lg bg-mint px-3 py-2 text-xs text-brand-dark">
+                        {used.length
+                          ? `The proposal will be built on ${used.join(" and ")} from this project.`
+                          : "This project has no objectives yet. Build them first for a stronger proposal, or carry on."}
+                      </p>
+                    );
+                  })()}
+                </div>
+              )}
               <div role="radiogroup" aria-label="Document type" className="grid gap-3 sm:grid-cols-3">
                 {ACTIONS.map((a) => {
                   const locked = billing?.can_generate?.[a.value] === false;

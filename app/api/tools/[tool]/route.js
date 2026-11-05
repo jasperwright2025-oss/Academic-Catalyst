@@ -4,11 +4,15 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { TOOL_KEYS, toolUsage } from "@/lib/tools/limits";
 import { runTool, ToolOutputError } from "@/lib/tools/run";
 import { WebSearchUnavailableError } from "@/lib/generation/claude";
+import { sampleSizes } from "@/lib/tools/sampleSize";
+import { objectivesText } from "@/lib/tools/projectText";
+
+
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
-const LIVE_TOOLS = ["topic_validator", "smart_objectives"];
+const LIVE_TOOLS = ["topic_validator", "smart_objectives", "methodology"];
 const clip = (v, n) => String(v ?? "").trim().slice(0, n);
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -73,6 +77,14 @@ export async function POST(request, { params }) {
     approach: clip(body.approach, 60),
     timeframe: clip(body.timeframe, 100),
   };
+  if (tool === "methodology") {
+    input.population_description = clip(body.population_description, 1000);
+    input.objectives = clip(body.objectives, 4000);
+    const population = Number(String(body.population ?? "").replace(/[^0-9]/g, ""));
+    input.population = population > 0 ? population : null;
+    input.confidence = [90, 95, 99].includes(Number(body.confidence)) ? Number(body.confidence) : 95;
+    input.margin = [0.03, 0.05, 0.1].includes(Number(body.margin)) ? Number(body.margin) : 0.05;
+  }
   if (input.topic.length < 10) {
     return NextResponse.json(
       { error: "BAD_REQUEST", message: "Please describe your topic in at least a few words." },
@@ -109,9 +121,32 @@ export async function POST(request, { params }) {
     projectId = created?.id ?? null;
   }
 
+  // Methodology: use the project's saved objectives when none were typed, and calculate the sample size in code.
+  let calculation = null;
+  if (tool === "methodology") {
+    if (!input.objectives && projectId) {
+      const { data: prior } = await supabase
+        .from("tool_runs")
+        .select("output")
+        .eq("project_id", projectId)
+        .eq("tool", "smart_objectives")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      input.objectives = objectivesText(prior?.output);
+    }
+    calculation = sampleSizes({ population: input.population, confidence: input.confidence, margin: input.margin });
+    input.sample_size_text = [
+      `Population (N): ${calculation.inputs.population ?? "large or unknown"}; confidence ${input.confidence}%; margin of error ${input.margin * 100}%; p = 0.5.`,
+      ...calculation.methods.map((m) => `${m.name}: n = ${m.n}`),
+      `Recommended sample size: ${calculation.recommended.n} (${calculation.recommended.name}).`,
+    ].join("\n");
+  }
+
   let output;
   try {
     ({ output } = await runTool(tool, input, { deadlineMs: startedAt + 270 * 1000 }));
+    if (calculation) output.sample_size = calculation;
   } catch (err) {
     if (err instanceof WebSearchUnavailableError) {
       return NextResponse.json(
@@ -137,7 +172,10 @@ export async function POST(request, { params }) {
   if (runErr) console.error("Tool run save error:", runErr);
 
   if (projectId) {
-    await supabase.from("projects").update({ updated_at: new Date().toISOString() }).eq("id", projectId);
+    const changes = { updated_at: new Date().toISOString() };
+    // The objectives are built on the title the user settled on, so it becomes the project's topic.
+    if (tool === "smart_objectives") Object.assign(changes, { topic: input.topic, title: input.topic.slice(0, 160) });
+    await supabase.from("projects").update(changes).eq("id", projectId);
   }
 
   return NextResponse.json({
