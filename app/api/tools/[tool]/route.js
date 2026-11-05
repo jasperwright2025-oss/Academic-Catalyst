@@ -7,6 +7,7 @@ import { WebSearchUnavailableError } from "@/lib/generation/claude";
 import { sampleSizes } from "@/lib/tools/sampleSize";
 import { objectivesText } from "@/lib/tools/projectText";
 import { getWorks } from "@/lib/tools/openalex";
+import { limitRun } from "@/lib/tools/visibility";
 import { apaReference, inTextCitation } from "@/lib/tools/references";
 
 
@@ -49,7 +50,8 @@ export async function GET(request, { params }) {
     .order("created_at", { ascending: false })
     .limit(10);
 
-  return NextResponse.json({ usage, runs: runs || [] });
+  const shown = (runs || []).map((r) => (tool === "literature_review" ? limitRun({ ...r, tool }, usage.unlimited) : r));
+  return NextResponse.json({ usage, runs: shown });
 }
 
 /**
@@ -210,8 +212,10 @@ export async function POST(request, { params }) {
     await supabase.from("projects").update(changes).eq("id", projectId);
   }
 
+  const usageAfter = await toolUsage(admin, user.id, tool);
+  const saved = run || { project_id: projectId, input, output, created_at: new Date().toISOString() };
   return NextResponse.json({
-    run: run || { project_id: projectId, input, output, created_at: new Date().toISOString() },
-    usage: await toolUsage(admin, user.id, tool),
+    run: tool === "literature_review" ? limitRun({ ...saved, tool }, usageAfter.unlimited) : saved,
+    usage: usageAfter,
   });
 }

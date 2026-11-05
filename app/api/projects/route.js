@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { effectiveTier } from "@/lib/payments/plan";
 
 export const dynamic = "force-dynamic";
 
@@ -35,9 +37,20 @@ export async function GET() {
     runs = data || [];
   }
 
+  const { data: sub } = await createAdminClient()
+    .from("subscriptions")
+    .select("tier, plan_expires_at")
+    .eq("user_id", user.id)
+    .maybeSingle();
+  const paid = effectiveTier(sub) !== "free";
+
   const withSteps = (projects || []).map((p) => {
     const latest = {};
     for (const r of runs) if (r.project_id === p.id && !latest[r.tool]) latest[r.tool] = r;
+    // The literature summary is part of the paid proposal: free users only learn that it exists.
+    if (latest.literature_review && !paid) {
+      latest.literature_review = { id: latest.literature_review.id, tool: "literature_review", created_at: latest.literature_review.created_at, output: { limited: true } };
+    }
     return { ...p, latest };
   });
 

@@ -277,9 +277,9 @@ export default function LiteratureTool({ service }) {
 
 function LiteratureResult({ run }) {
   const o = run.output;
+  const limited = Boolean(o.limited);
   const papers = o.papers || [];
   const byKey = Object.fromEntries(papers.map((p) => [p.key, p]));
-  const [copied, setCopied] = useState("");
 
   // Replaces [P1; P3] keys with in-text citations built from the database records.
   const cite = (text) =>
@@ -288,43 +288,40 @@ function LiteratureResult({ run }) {
       return list.length ? `(${list.join("; ")})` : "";
     });
 
-  const references = papers.map((p) => p.reference).sort((a, b) => a.localeCompare(b));
-  const plain = (s) => s.replace(/\*/g, "");
-
-  async function copy(label, text) {
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopied(label);
-      setTimeout(() => setCopied(""), 2000);
-    } catch {
-      // visible on screen
-    }
-  }
-
-  const summaryText = [
-    o.overview,
-    ...(o.themes || []).map((t) => `${t.theme}\n${cite(t.synthesis)}`),
-    "References",
-    ...references.map(plain),
-  ].join("\n\n");
+  const references = limited ? [] : papers.map((p) => p.reference).filter(Boolean).sort((a, b) => a.localeCompare(b));
+  const hidden = o.hidden || {};
+  const proposalHref = `/dashboard/write?project=${run.project_id || ""}`;
 
   return (
-    <section id="result" className="mt-10 scroll-mt-6 space-y-6">
+    <section id="result" className={`mt-10 scroll-mt-6 space-y-6 ${limited ? "select-none" : ""}`}>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="font-serif text-3xl font-medium">What the evidence says</h2>
-        <div className="flex flex-wrap gap-2">
-          <button type="button" onClick={() => copy("summary", summaryText)} className="rounded-full border border-[#C9CCC4] bg-white px-4 py-2 text-sm font-semibold">{copied === "summary" ? "Copied" : "Copy summary"}</button>
-          <button type="button" onClick={() => copy("refs", references.map(plain).join("\n"))} className="rounded-full border border-[#C9CCC4] bg-white px-4 py-2 text-sm font-semibold">{copied === "refs" ? "Copied" : "Copy references"}</button>
-          <button type="button" onClick={() => download("references.ris", risExport(papers))} className="rounded-full border border-[#C9CCC4] bg-white px-4 py-2 text-sm font-semibold">RIS</button>
-          <button type="button" onClick={() => download("references.bib", bibtexExport(papers))} className="rounded-full border border-[#C9CCC4] bg-white px-4 py-2 text-sm font-semibold">BibTeX</button>
-        </div>
+        {!limited && papers.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            <button type="button" onClick={() => download("references.ris", risExport(papers))} className="rounded-full border border-[#C9CCC4] bg-white px-4 py-2 text-sm font-semibold">Export RIS</button>
+            <button type="button" onClick={() => download("references.bib", bibtexExport(papers))} className="rounded-full border border-[#C9CCC4] bg-white px-4 py-2 text-sm font-semibold">Export BibTeX</button>
+          </div>
+        )}
       </div>
+      {limited && (
+        <p className="rounded-xl bg-sand px-4 py-3 text-sm text-[#7A4A0C]">
+          This is a preview. The full synthesis, the complete matrix and the verified reference list are written into your
+          full research proposal.
+        </p>
+      )}
       {o.overview && <p className="max-w-3xl text-[17px] leading-relaxed text-ink-soft">{cite(o.overview)}</p>}
 
       {(o.themes || []).map((t) => (
-        <div key={t.theme} className="rounded-2xl border border-line bg-white p-6">
+        <div key={t.theme} className="relative overflow-hidden rounded-2xl border border-line bg-white p-6">
           <h3 className="font-serif text-xl font-medium">{t.theme}</h3>
           <p className="mt-2.5 leading-relaxed text-ink-soft">{cite(t.synthesis)}</p>
+          {limited && (
+            <div aria-hidden="true" className="mt-2 space-y-2">
+              <div className="h-3 w-full rounded bg-[#EEF0EA]" />
+              <div className="h-3 w-11/12 rounded bg-[#EEF0EA]" />
+              <div className="h-3 w-4/6 rounded bg-[#EEF0EA]" />
+            </div>
+          )}
         </div>
       ))}
 
@@ -353,28 +350,47 @@ function LiteratureResult({ run }) {
             </tbody>
           </table>
         </div>
+        {limited && hidden.matrix_rows > 0 && (
+          <p className="mt-3 text-sm text-muted">🔒 {hidden.matrix_rows} more {hidden.matrix_rows === 1 ? "study" : "studies"} in your full proposal</p>
+        )}
       </div>
 
       {(o.gaps || []).length > 0 && (
         <div className="rounded-2xl bg-sand p-6">
           <h3 className="font-bold">Gaps your study could fill</h3>
           <ul className="mt-2.5 space-y-1.5 text-[15px] text-[#5A3A0C]">{o.gaps.map((g) => <li key={g}>· {g}</li>)}</ul>
+          {limited && hidden.gaps > 0 && <p className="mt-2 text-sm text-[#7A4A0C]">🔒 {hidden.gaps} more in your full proposal</p>}
         </div>
       )}
 
-      <div className="rounded-2xl border border-line bg-white p-6">
-        <h3 className="font-bold">References (APA 7th)</h3>
-        <ul className="mt-3 space-y-2.5 text-sm leading-relaxed">
-          {references.map((r) => <li key={r} className="pl-6 -indent-6"><Italics text={r} /></li>)}
-        </ul>
-        <p className="mt-4 text-xs text-muted">Built from the database records. Summaries are based on the abstracts; read the full studies before you rely on them.</p>
-      </div>
+      {limited ? (
+        <div className="rounded-2xl border border-line bg-white p-6">
+          <h3 className="font-bold">References</h3>
+          <p className="mt-2 text-[15px] text-ink-soft">
+            🔒 {hidden.references || papers.length} verified references, in APA 7th edition, are included in your full research proposal.
+          </p>
+        </div>
+      ) : (
+        <div className="rounded-2xl border border-line bg-white p-6">
+          <h3 className="font-bold">References (APA 7th)</h3>
+          <ul className="mt-3 space-y-2.5 text-sm leading-relaxed">
+            {references.map((r) => <li key={r} className="pl-6 -indent-6"><Italics text={r} /></li>)}
+          </ul>
+          <p className="mt-4 text-xs text-muted">Built from the database records. Summaries are based on the abstracts; read the full studies before you rely on them.</p>
+        </div>
+      )}
 
       <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl bg-ink px-6 py-5 text-white">
-        <p className="text-[15px]">These studies are saved to your project and will be cited in your proposal.</p>
+        <p className="text-[15px]">
+          {limited
+            ? "Your chosen studies are saved to the project. The full literature review is written into your proposal."
+            : "These studies are saved to your project and will be cited in your proposal."}
+        </p>
         <div className="flex flex-wrap gap-2.5">
-          <Link href={`/dashboard/tools/methodology?project=${run.project_id || ""}`} className="rounded-full bg-white px-5 py-3 text-sm font-semibold text-ink">Plan the methodology</Link>
-          <Link href={`/dashboard/write?project=${run.project_id || ""}`} className="rounded-full border border-white/40 px-5 py-3 text-sm font-semibold">Write the full proposal</Link>
+          <Link href={`/dashboard/tools/methodology?project=${run.project_id || ""}`} className="rounded-full border border-white/40 px-5 py-3 text-sm font-semibold">Plan the methodology</Link>
+          <Link href={proposalHref} className="rounded-full bg-white px-5 py-3 text-sm font-semibold text-ink">
+            {limited ? "Get the full proposal" : "Write the full proposal"}
+          </Link>
         </div>
       </div>
     </section>
