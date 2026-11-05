@@ -24,7 +24,7 @@ export default function ServicePage({ service: s }) {
             <p className="mt-6 max-w-xl text-lg leading-relaxed text-ink-soft">{s.intro}</p>
             <div className="mt-8 flex flex-wrap items-center gap-4">
               <Link href={live ? "/register" : "/register?interest=" + s.slug} className="rounded-full bg-brand px-6 py-4 font-semibold text-white transition hover:bg-brand-dark">
-                {live ? "Start free" : "Create a free account"}
+                {live ? (s.group === "tools" ? `Try the ${s.name} free` : "Start free") : "Create a free account"}
               </Link>
               <span className="text-sm font-semibold text-ink-soft">{s.price}</span>
             </div>

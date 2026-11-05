@@ -41,13 +41,13 @@ export default function HomePage() {
             </p>
             <div className="mt-9 flex flex-wrap gap-3.5">
               <Link href="/register" className="rounded-full bg-brand px-6 py-4 text-base font-semibold text-white transition hover:bg-brand-dark">
-                Start free
+                Check a topic free
               </Link>
               <Link href="#services" className="rounded-full border border-[#C9CCC4] px-6 py-4 text-base font-semibold text-ink transition hover:border-ink">
                 See all services
               </Link>
             </div>
-            <p className="mt-4 text-sm text-muted">Free account. One free proposal preview, and free tools opening soon.</p>
+            <p className="mt-4 text-sm text-muted">Free account. Free topic and objective checks every month, and a free proposal preview.</p>
           </div>
 
           <div className="min-w-0 flex-[1_1_420px]">
