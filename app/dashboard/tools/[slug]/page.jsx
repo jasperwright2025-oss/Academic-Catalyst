@@ -481,12 +481,25 @@ function Block({ title, children }) {
   );
 }
 
+function Locked({ children }) {
+  return <p className="mt-2 text-sm text-muted">🔒 {children}</p>;
+}
+
 function MethodologyResult({ run }) {
   const o = run.output;
+  const limited = Boolean(o.limited);
+  const h = o.hidden || {};
   const calc = o.sample_size;
+  const proposalHref = `/dashboard/write?project=${run.project_id || ""}`;
   return (
-    <div className="space-y-5">
+    <div className={`space-y-5 ${limited ? "select-none" : ""}`}>
       <h2 className="font-serif text-2xl font-medium">Your methodology plan</h2>
+      {limited && (
+        <p className="rounded-xl bg-sand px-4 py-3 text-sm text-[#7A4A0C]">
+          This is a preview. Your sample size is shown in full; the complete plan (sampling breakdown, instruments, analysis,
+          validity, ethics and limitations) is written into your full research proposal.
+        </p>
+      )}
 
       {calc && (
         <div className="rounded-2xl bg-mint p-6">
@@ -512,66 +525,87 @@ function MethodologyResult({ run }) {
       )}
 
       <div className="grid gap-5 md:grid-cols-2">
-        <Block title="Research philosophy">{o.philosophy}</Block>
+        <Block title="Research philosophy">{o.philosophy}{limited && <Locked>Full justification in your proposal</Locked>}</Block>
         <Block title="Approach and design">{o.approach_and_design}</Block>
-        <Block title="Study area">{o.study_area}</Block>
-        <Block title="Population">{o.population}</Block>
+        <Block title="Study area">{o.study_area}{limited && <Locked>Full description in your proposal</Locked>}</Block>
+        <Block title="Population">{o.population}{limited && <Locked>Full description in your proposal</Locked>}</Block>
       </div>
 
       <Block title="Sampling">
         <p>{o.sampling}</p>
-        {(o.sample_breakdown || []).length > 0 && (
-          <div className="mt-4 overflow-x-auto">
-            <table className="w-full min-w-[420px] border-collapse text-sm">
-              <thead><tr className="text-left text-muted"><th scope="col" className="border-b border-line py-2 pr-4 font-semibold">Group</th><th scope="col" className="border-b border-line py-2 pr-4 font-semibold">Number</th><th scope="col" className="border-b border-line py-2 font-semibold">How they are chosen</th></tr></thead>
-              <tbody>
-                {o.sample_breakdown.map((g) => (
-                  <tr key={g.group}><td className="border-b border-[#F0F0EA] py-2 pr-4 font-medium text-ink">{g.group}</td><td className="border-b border-[#F0F0EA] py-2 pr-4">{g.number}</td><td className="border-b border-[#F0F0EA] py-2">{g.selection}</td></tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+        {limited ? (
+          h.sample_breakdown > 0 && <Locked>How the sample divides between {h.sample_breakdown} groups, and how each is chosen, is in your proposal</Locked>
+        ) : (
+          (o.sample_breakdown || []).length > 0 && (
+            <div className="mt-4 overflow-x-auto">
+              <table className="w-full min-w-[420px] border-collapse text-sm">
+                <thead><tr className="text-left text-muted"><th scope="col" className="border-b border-line py-2 pr-4 font-semibold">Group</th><th scope="col" className="border-b border-line py-2 pr-4 font-semibold">Number</th><th scope="col" className="border-b border-line py-2 font-semibold">How they are chosen</th></tr></thead>
+                <tbody>
+                  {o.sample_breakdown.map((g) => (
+                    <tr key={g.group}><td className="border-b border-[#F0F0EA] py-2 pr-4 font-medium text-ink">{g.group}</td><td className="border-b border-[#F0F0EA] py-2 pr-4">{g.number}</td><td className="border-b border-[#F0F0EA] py-2">{g.selection}</td></tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )
         )}
       </Block>
 
       <Block title="Instruments">
         <ul className="space-y-2">
           {(o.instruments || []).map((x) => (
-            <li key={x.instrument}><span className="font-semibold text-ink">{x.instrument}</span> <span className="text-muted">(objectives {x.for_objectives})</span>: {x.description}</li>
+            <li key={x.instrument}>
+              <span className="font-semibold text-ink">{x.instrument}</span> <span className="text-muted">(objectives {x.for_objectives})</span>
+              {!limited && x.description ? `: ${x.description}` : ""}
+            </li>
           ))}
         </ul>
-        {o.procedure && <p className="mt-3">{o.procedure}</p>}
+        {limited ? <Locked>The full instruments and data collection procedure are in your proposal</Locked> : o.procedure && <p className="mt-3">{o.procedure}</p>}
       </Block>
 
       <Block title="Analysis by objective">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[520px] border-collapse text-sm">
-            <thead><tr className="text-left text-muted"><th scope="col" className="border-b border-line py-2 pr-4 font-semibold">Objective</th><th scope="col" className="border-b border-line py-2 pr-4 font-semibold">Method</th><th scope="col" className="border-b border-line py-2 pr-4 font-semibold">Software</th><th scope="col" className="border-b border-line py-2 font-semibold">What it shows</th></tr></thead>
+            <thead><tr className="text-left text-muted"><th scope="col" className="border-b border-line py-2 pr-4 font-semibold">Objective</th><th scope="col" className="border-b border-line py-2 pr-4 font-semibold">Method</th>{!limited && <><th scope="col" className="border-b border-line py-2 pr-4 font-semibold">Software</th><th scope="col" className="border-b border-line py-2 font-semibold">What it shows</th></>}</tr></thead>
             <tbody>
               {(o.analysis || []).map((a) => (
-                <tr key={a.objective}><td className="border-b border-[#F0F0EA] py-2 pr-4 text-ink">{a.objective}</td><td className="border-b border-[#F0F0EA] py-2 pr-4">{a.method}</td><td className="border-b border-[#F0F0EA] py-2 pr-4">{a.software}</td><td className="border-b border-[#F0F0EA] py-2">{a.output}</td></tr>
+                <tr key={a.objective}><td className="border-b border-[#F0F0EA] py-2 pr-4 text-ink">{a.objective}</td><td className="border-b border-[#F0F0EA] py-2 pr-4">{a.method}</td>{!limited && <><td className="border-b border-[#F0F0EA] py-2 pr-4">{a.software}</td><td className="border-b border-[#F0F0EA] py-2">{a.output}</td></>}</tr>
               ))}
             </tbody>
           </table>
         </div>
+        {limited && h.analysis_rows > 0 && <Locked>Analysis for {h.analysis_rows} more {h.analysis_rows === 1 ? "objective" : "objectives"} in your proposal</Locked>}
       </Block>
 
-      <div className="grid gap-5 md:grid-cols-2">
-        <Block title="Validity and reliability">{o.validity_reliability}</Block>
-        <Block title="Ethics">
-          <ul className="space-y-1.5">{(o.ethics || []).map((e) => <li key={e}>· {e}</li>)}</ul>
+      {limited ? (
+        <Block title="Validity, ethics and limitations">
+          <Locked>Validity and reliability checks, {h.ethics} ethical safeguards and {h.limitations} limitations with how each is handled are in your proposal</Locked>
         </Block>
-      </div>
-
-      <Block title="Limitations and how they are handled">
-        <ul className="space-y-2">
-          {(o.limitations || []).map((l) => <li key={l.limitation}><span className="font-semibold text-ink">{l.limitation}</span> {l.mitigation}</li>)}
-        </ul>
-      </Block>
+      ) : (
+        <>
+          <div className="grid gap-5 md:grid-cols-2">
+            <Block title="Validity and reliability">{o.validity_reliability}</Block>
+            <Block title="Ethics">
+              <ul className="space-y-1.5">{(o.ethics || []).map((e) => <li key={e}>· {e}</li>)}</ul>
+            </Block>
+          </div>
+          <Block title="Limitations and how they are handled">
+            <ul className="space-y-2">
+              {(o.limitations || []).map((l) => <li key={l.limitation}><span className="font-semibold text-ink">{l.limitation}</span> {l.mitigation}</li>)}
+            </ul>
+          </Block>
+        </>
+      )}
 
       <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl bg-ink px-6 py-5 text-white">
-        <p className="text-[15px]">Your title, objectives and this plan are saved to the project. Turn them into a full proposal.</p>
-        <Link href={`/dashboard/write?project=${run.project_id || ""}`} className="rounded-full bg-white px-5 py-3 text-sm font-semibold text-ink">Write the full proposal</Link>
+        <p className="text-[15px]">
+          {limited
+            ? "Your title, objectives and this plan are saved to the project. The complete methodology is written into your proposal."
+            : "Your title, objectives and this plan are saved to the project. Turn them into a full proposal."}
+        </p>
+        <Link href={proposalHref} className="rounded-full bg-white px-5 py-3 text-sm font-semibold text-ink">
+          {limited ? "Get the full proposal" : "Write the full proposal"}
+        </Link>
       </div>
     </div>
   );

@@ -48,8 +48,10 @@ export async function GET() {
     const latest = {};
     for (const r of runs) if (r.project_id === p.id && !latest[r.tool]) latest[r.tool] = r;
     // The literature summary is part of the paid proposal: free users only learn that it exists.
-    if (latest.literature_review && !paid) {
-      latest.literature_review = { id: latest.literature_review.id, tool: "literature_review", created_at: latest.literature_review.created_at, output: { limited: true } };
+    for (const key of ["literature_review", "methodology"]) {
+      if (latest[key] && !paid) {
+        latest[key] = { id: latest[key].id, tool: key, created_at: latest[key].created_at, output: { limited: true } };
+      }
     }
     return { ...p, latest };
   });

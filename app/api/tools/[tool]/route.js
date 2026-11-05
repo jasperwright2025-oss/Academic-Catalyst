@@ -50,7 +50,7 @@ export async function GET(request, { params }) {
     .order("created_at", { ascending: false })
     .limit(10);
 
-  const shown = (runs || []).map((r) => (tool === "literature_review" ? limitRun({ ...r, tool }, usage.unlimited) : r));
+  const shown = (runs || []).map((r) => limitRun({ ...r, tool }, usage.unlimited));
   return NextResponse.json({ usage, runs: shown });
 }
 
@@ -215,7 +215,7 @@ export async function POST(request, { params }) {
   const usageAfter = await toolUsage(admin, user.id, tool);
   const saved = run || { project_id: projectId, input, output, created_at: new Date().toISOString() };
   return NextResponse.json({
-    run: tool === "literature_review" ? limitRun({ ...saved, tool }, usageAfter.unlimited) : saved,
+    run: limitRun({ ...saved, tool }, usageAfter.unlimited),
     usage: usageAfter,
   });
 }

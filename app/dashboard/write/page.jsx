@@ -1084,7 +1084,7 @@ function LockedPreview({ text, sections, totalWords, canUseCredit, unlocking, on
       </div>
 
       <div className="relative mt-4 overflow-hidden rounded-lg bg-white">
-        <div className="max-h-96 overflow-hidden whitespace-pre-wrap p-4 text-sm leading-relaxed text-slate-800">
+        <div className="max-h-96 select-none overflow-hidden whitespace-pre-wrap p-4 text-sm leading-relaxed text-slate-800" onCopy={(e) => e.preventDefault()}>
           {text}
         </div>
         <div
