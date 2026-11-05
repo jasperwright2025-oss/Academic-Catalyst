@@ -1,3 +1,4 @@
+import { stripCites } from "@/lib/tools/clean";
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -46,7 +47,7 @@ export async function GET() {
 
   const withSteps = (projects || []).map((p) => {
     const latest = {};
-    for (const r of runs) if (r.project_id === p.id && !latest[r.tool]) latest[r.tool] = r;
+    for (const r of runs) if (r.project_id === p.id && !latest[r.tool]) latest[r.tool] = { ...r, output: stripCites(r.output) };
     // The literature summary is part of the paid proposal: free users only learn that it exists.
     for (const key of ["literature_review", "methodology"]) {
       if (latest[key] && !paid) {
