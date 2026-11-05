@@ -31,8 +31,14 @@ export async function GET(request) {
     return NextResponse.json(result);
   } catch (err) {
     console.error("Literature search error:", err?.status, err?.message);
+    const busy = err?.status === 429;
     return NextResponse.json(
-      { error: "SEARCH_UNAVAILABLE", message: "The research database did not respond. Please try again in a moment." },
+      {
+        error: "SEARCH_UNAVAILABLE",
+        message: busy
+          ? "The research database is very busy right now. Please wait about a minute and search again."
+          : "The research database did not respond. Please try again in a moment.",
+      },
       { status: 503 }
     );
   }
