@@ -6,6 +6,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { getTool, runToolRequest, listProjects, isUnauthorized, isLimitReached } from "@/lib/api/client";
 import { serviceBySlug } from "@/lib/site/content";
 import LiteratureTool from "@/components/app/LiteratureTool";
+import UnlockBox from "@/components/app/UnlockBox";
 
 const LIVE = ["topic-validator", "smart-objectives", "literature-review", "methodology"];
 const LEVELS = ["Master's", "PhD", "Undergraduate", "Postgraduate diploma", "Professional or workplace study"];
@@ -494,12 +495,7 @@ function MethodologyResult({ run }) {
   return (
     <div className={`space-y-5 ${limited ? "select-none" : ""}`}>
       <h2 className="font-serif text-2xl font-medium">Your methodology plan</h2>
-      {limited && (
-        <p className="rounded-xl bg-sand px-4 py-3 text-sm text-[#7A4A0C]">
-          This is a preview. Your sample size is shown in full; the complete plan (sampling breakdown, instruments, analysis,
-          validity, ethics and limitations) is written into your full research proposal.
-        </p>
-      )}
+      {limited && <UnlockBox what="methodology plan" projectId={run.project_id} />}
 
       {calc && (
         <div className="rounded-2xl bg-mint p-6">

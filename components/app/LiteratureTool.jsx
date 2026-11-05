@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { getTool, runToolRequest, listProjects, searchLiterature, isUnauthorized, isLimitReached } from "@/lib/api/client";
 import { risExport, bibtexExport } from "@/lib/tools/references";
+import UnlockBox from "@/components/app/UnlockBox";
 
 const MAX_SELECTED = 15;
 const field =
@@ -303,12 +304,7 @@ function LiteratureResult({ run }) {
           </div>
         )}
       </div>
-      {limited && (
-        <p className="rounded-xl bg-sand px-4 py-3 text-sm text-[#7A4A0C]">
-          This is a preview. The full synthesis, the complete matrix and the verified reference list are written into your
-          full research proposal.
-        </p>
-      )}
+      {limited && <UnlockBox what="literature review" projectId={run.project_id} />}
       {o.overview && <p className="max-w-3xl text-[17px] leading-relaxed text-ink-soft">{cite(o.overview)}</p>}
 
       {(o.themes || []).map((t) => (
