@@ -11,7 +11,9 @@ import { planningWork } from '@/lib/tools/projectText';
 // The writing itself happens in /api/jobs/run, one stage at a time.
 export const maxDuration = 60;
 
-const MAX_TEXT_INPUT_BYTES = 150 * 1024; // 150 KB
+// About 100,000 words in all: room for a full proposal with appendices plus field data and transcripts,
+// while every writing stage still fits comfortably in the model's context.
+const MAX_TEXT_INPUT_BYTES = 400 * 1024; // 400 KB
 const COOLDOWN_SECONDS = 30;
 
 const VALID_ACTIONS = ['generate_proposal', 'simulate_data', 'compile_dissertation'];
@@ -47,7 +49,7 @@ export async function POST(request) {
       return NextResponse.json(
         {
           error: 'PAYLOAD_TOO_LARGE',
-          message: `Your input is too large. Please keep the total under ${Math.round(MAX_TEXT_INPUT_BYTES / 1024)} KB.`,
+          message: `Your text is above the ${Math.round(MAX_TEXT_INPUT_BYTES / 1024)} KB limit. Remove what the writing does not need, such as blank forms in the appendices or raw data columns you will not analyse, and try again.`,
         },
         { status: 413 }
       );

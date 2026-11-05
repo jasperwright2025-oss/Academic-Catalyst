@@ -39,7 +39,7 @@ import CoverDetailsPanel from "@/components/CoverDetailsPanel";
 const SHOW_CARD_PAYMENTS = process.env.NEXT_PUBLIC_SHOW_CARD_PAYMENTS === "true";
 
 const PAGE_SIZE = 10;
-const MAX_INPUT_BYTES = 150 * 1024; // keep in step with the limit in /api/generate
+const MAX_INPUT_BYTES = 400 * 1024; // keep in step with the limit in /api/generate
 
 const ACTIONS = [
   {
@@ -1491,7 +1491,10 @@ export default function DashboardPage() {
       [topic, institution, sample, whyYou, whyNow, uploadedProposal, uploadedFieldData].join("")
     ).length;
     if (totalBytes > MAX_INPUT_BYTES) {
-      setGenError(`Your input is too large. Please keep the total under ${Math.round(MAX_INPUT_BYTES / 1024)} KB.`);
+      setGenError(
+        `Your text comes to ${Math.round(totalBytes / 1024)} KB, above the ${Math.round(MAX_INPUT_BYTES / 1024)} KB limit. ` +
+          "Remove what the writing does not need, such as blank forms in the appendices, repeated tables or raw data columns you will not analyse, and try again."
+      );
       return;
     }
 
