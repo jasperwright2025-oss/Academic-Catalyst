@@ -3,6 +3,7 @@ import SiteHeader from "@/components/site/SiteHeader";
 import SiteFooter from "@/components/site/SiteFooter";
 import JourneyTabs from "@/components/site/JourneyTabs";
 import PlanGrid from "@/components/site/PlanGrid";
+import VideoEmbed from "@/components/site/VideoEmbed";
 import { SITE, SERVICES, JOURNEY, SINGLE_PRICES, serviceHref } from "@/lib/site/content";
 
 const EXAMPLE_SCORES = [
@@ -43,8 +44,8 @@ export default function HomePage() {
               <Link href="/register" className="rounded-full bg-brand px-6 py-4 text-base font-semibold text-white transition hover:bg-brand-dark">
                 Check a topic free
               </Link>
-              <Link href="#services" className="rounded-full border border-[#C9CCC4] px-6 py-4 text-base font-semibold text-ink transition hover:border-ink">
-                See all services
+              <Link href="#demo" className="rounded-full border border-[#C9CCC4] px-6 py-4 text-base font-semibold text-ink transition hover:border-ink">
+                ▶ Watch the 90-second demo
               </Link>
             </div>
             <p className="mt-4 text-sm text-muted">Free account. Free topic and objective checks every month, and a free proposal preview.</p>
@@ -75,6 +76,18 @@ export default function HomePage() {
                 study to one market.
               </p>
             </div>
+          </div>
+        </section>
+
+        {/* Demo video */}
+        <section id="demo" className="mx-auto max-w-5xl scroll-mt-24 px-6 pb-20">
+          <p className="text-[13px] font-semibold uppercase tracking-wider text-brand">See it in action</p>
+          <h2 className="mt-3 font-serif text-4xl font-medium tracking-tight sm:text-[44px]">From rough idea to full proposal in 90 seconds</h2>
+          <p className="mt-4 max-w-2xl text-[17px] leading-relaxed text-ink-soft">
+            One sample topic, taken through all five steps to a formatted Word document.
+          </p>
+          <div className="mt-8">
+            <VideoEmbed id="sGeh3ZX-kvg" poster="/demo-poster.jpg" title="How to write a research proposal in 5 steps with Academic Catalyst" />
           </div>
         </section>
 
