@@ -99,7 +99,7 @@ export default function DashboardShell({ children }) {
         <div className="mt-auto space-y-3">
           <div className="rounded-2xl bg-white/7 p-4">
             <p className="text-sm leading-relaxed">Full proposals and unlimited tools from $70 a month.</p>
-            <Link href="/pricing" className="mt-2 inline-block text-sm font-semibold text-[#3CC2A2]">See plans →</Link>
+            <Link href="/pricing" className="mt-2 inline-block text-sm font-semibold text-[#8FB2F0]">See plans →</Link>
           </div>
           <button type="button" onClick={signOut} disabled={signingOut} className="w-full rounded-xl px-3 py-2.5 text-left text-sm text-[#C7CFDC] hover:bg-white/8 hover:text-white">
             {signingOut ? "Signing out..." : "Sign out"}

@@ -178,11 +178,11 @@ export default function LiteratureTool({ service }) {
             </select>
           </div>
           <label className="flex min-h-11 items-center gap-2 text-sm">
-            <input type="checkbox" checked={oaOnly} onChange={(e) => setOaOnly(e.target.checked)} className="h-4 w-4 accent-[#0E7C66]" />
+            <input type="checkbox" checked={oaOnly} onChange={(e) => setOaOnly(e.target.checked)} className="h-4 w-4 accent-[#1F4FA8]" />
             Free to read only
           </label>
           <label className="flex min-h-11 items-center gap-2 text-sm">
-            <input type="checkbox" checked={reviewsOnly} onChange={(e) => setReviewsOnly(e.target.checked)} className="h-4 w-4 accent-[#0E7C66]" />
+            <input type="checkbox" checked={reviewsOnly} onChange={(e) => setReviewsOnly(e.target.checked)} className="h-4 w-4 accent-[#1F4FA8]" />
             Reviews only
           </label>
           <button type="submit" disabled={searching} className="ml-auto rounded-full bg-brand px-6 py-3 font-semibold text-white hover:bg-brand-dark disabled:opacity-60">
@@ -224,7 +224,7 @@ export default function LiteratureTool({ service }) {
                       onChange={() => toggle(p)}
                       disabled={!on && selected.size >= MAX_SELECTED}
                       aria-label={`Select: ${p.title}`}
-                      className="mt-1 h-5 w-5 flex-none accent-[#0E7C66]"
+                      className="mt-1 h-5 w-5 flex-none accent-[#1F4FA8]"
                     />
                     <div className="min-w-0 flex-1">
                       <p className="font-semibold leading-snug text-ink">{p.title}</p>

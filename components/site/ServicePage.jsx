@@ -41,8 +41,8 @@ export default function ServicePage({ service: s }) {
               {s.features.map((f) => (
                 <li key={f} className="flex items-start gap-3 text-[15px] leading-relaxed">
                   <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true" className="mt-0.5 flex-none">
-                    <circle cx="10" cy="10" r="9" fill="#E3F2EE" />
-                    <path d="M6 10.5l2.5 2.5L14 7.5" fill="none" stroke="#0E7C66" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    <circle cx="10" cy="10" r="9" fill="#E7EEFA" />
+                    <path d="M6 10.5l2.5 2.5L14 7.5" fill="none" stroke="#1F4FA8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                   <span>{f}</span>
                 </li>
