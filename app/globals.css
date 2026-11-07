@@ -20,3 +20,19 @@ html { scroll-behavior: smooth; }
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
 
 @keyframes fadeUp { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+/* Blog article body (rendered Markdown) */
+.blog-body { font-size: 1.0625rem; line-height: 1.75; color: var(--color-ink-soft, #2b3a55); }
+.blog-body > * + * { margin-top: 1.15em; }
+.blog-body h2 { font-family: var(--font-serif, Newsreader, Georgia, serif); font-size: 1.75rem; line-height: 1.25; font-weight: 500; color: var(--color-ink, #10203a); margin-top: 2.2em; }
+.blog-body h3 { font-size: 1.2rem; font-weight: 700; color: var(--color-ink, #10203a); margin-top: 1.8em; }
+.blog-body a { color: var(--color-brand, #14306B); text-decoration: underline; text-underline-offset: 3px; }
+.blog-body ul { list-style: disc; padding-left: 1.4em; }
+.blog-body ol { list-style: decimal; padding-left: 1.4em; }
+.blog-body li + li { margin-top: 0.4em; }
+.blog-body blockquote { border-left: 3px solid #F2A93B; padding: 0.2em 0 0.2em 1em; color: var(--color-ink, #10203a); }
+.blog-body strong { color: var(--color-ink, #10203a); }
+.blog-body table { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
+.blog-body th, .blog-body td { border: 1px solid #e3e1da; padding: 0.55em 0.7em; text-align: left; vertical-align: top; }
+.blog-body th { background: #f5f3ee; color: var(--color-ink, #10203a); }
+.blog-body code { background: #f1efe9; padding: 0.1em 0.35em; border-radius: 4px; font-size: 0.92em; }

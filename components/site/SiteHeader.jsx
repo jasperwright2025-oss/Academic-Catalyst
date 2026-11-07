@@ -18,6 +18,7 @@ export default function SiteHeader() {
           <Menu label="Tools" items={TOOLS} />
           <Menu label="Services" items={FULL_SERVICES} />
           <Link href="/pricing" className={linkClass}>Pricing</Link>
+          <Link href="/blog" className={linkClass}>Blog</Link>
           <Link href="/login" className={linkClass}>Sign in</Link>
           <Link href="/register" className="rounded-full bg-ink px-5 py-3 font-semibold text-white hover:bg-[#1c3156]">
             Start free
@@ -43,6 +44,7 @@ export default function SiteHeader() {
             </ul>
             <div className="mt-4 flex flex-col gap-2 border-t border-line pt-4">
               <Link href="/pricing" className="px-2 py-2 text-ink">Pricing</Link>
+              <Link href="/blog" className="px-2 py-2 text-ink">Blog</Link>
               <Link href="/login" className="px-2 py-2 text-ink">Sign in</Link>
               <Link href="/register" className="rounded-full bg-ink px-4 py-3 text-center font-semibold text-white">Start free</Link>
             </div>

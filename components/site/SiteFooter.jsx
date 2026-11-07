@@ -20,6 +20,7 @@ export default function SiteFooter() {
           title="Company"
           items={[
             ["Pricing", "/pricing"],
+            ["Blog", "/blog"],
             ["Privacy Policy", "/privacy"],
             ["Terms of Service", "/terms"],
             [`Contact: ${LEGAL.contactEmail}`, `mailto:${LEGAL.contactEmail}`],
