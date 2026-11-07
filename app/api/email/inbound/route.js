@@ -5,7 +5,7 @@
 //   RESEND_API_KEY         already set (sending-only key); used to send the forward
 //   RESEND_INBOUND_API_KEY full-access key; used only to read received emails and attachments
 //   RESEND_WEBHOOK_SECRET  the webhook's signing secret from the Resend dashboard (whsec_...)
-//   INBOUND_FORWARD_TO     optional; defaults to jasperwright2025@gmail.com
+//   INBOUND_FORWARD_TO     optional; defaults to wattisimon@gmail.com
 import crypto from "node:crypto";
 import { NextResponse } from "next/server";
 
@@ -13,7 +13,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const DOMAIN = "academic-catalyst.app";
-const DEFAULT_FORWARD_TO = "jasperwright2025@gmail.com";
+const DEFAULT_FORWARD_TO = "wattisimon@gmail.com";
 const TOLERANCE_SECONDS = 5 * 60;
 
 // Resend signs webhooks with Svix: HMAC-SHA256 over "id.timestamp.body".
