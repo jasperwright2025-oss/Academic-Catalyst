@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2560" height="1440" viewBox="0 0 2560 1440">
+  <rect width="2560" height="1440" fill="#14306B"/>
+  <g transform="translate(507,509)">
+    <text x="0" y="110" font-family="DejaVu Sans, Arial, sans-serif" font-size="96" font-weight="700" fill="#ffffff">From a rough idea to a</text>
+    <text x="0" y="230" font-family="DejaVu Sans, Arial, sans-serif" font-size="96" font-weight="700" fill="#ffffff">proposal you can <tspan fill="#F2A93B">defend.</tspan></text>
+    <text x="0" y="330" font-family="DejaVu Sans, Arial, sans-serif" font-size="46" fill="#C9D4EE">Topic  →  Objectives  →  Literature  →  Methods</text>
+    <text x="0" y="400" font-family="DejaVu Sans, Arial, sans-serif" font-size="40" font-weight="700" fill="#ffffff">academic-catalyst.app</text>
+  </g>
+  <g transform="translate(1910,470) scale(0.62)">
+  <circle cx="400" cy="400" r="360" fill="#ffffff" opacity="0.08"/>
+  <path d="M560 255 A210 210 0 1 0 560 545" fill="none" stroke="#ffffff" stroke-width="54" stroke-linecap="round"/>
+  <path d="M322 515 L400 310 L478 515" fill="none" stroke="#F2A93B" stroke-width="44" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M350 450 H450" stroke="#F2A93B" stroke-width="38" stroke-linecap="round"/>
+  <path d="M590 335 l20 -45 l20 45 l45 20 l-45 20 l-20 45 l-20 -45 l-45 -20 z" fill="#ffffff"/>
+</g>
+</svg>

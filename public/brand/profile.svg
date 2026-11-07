@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="800" viewBox="0 0 800 800">
+  <rect width="800" height="800" fill="#ffffff"/>
+  <circle cx="400" cy="400" r="360" fill="#14306B"/>
+  <!-- C: open arc facing right -->
+  <path d="M560 255 A210 210 0 1 0 560 545" fill="none" stroke="#ffffff" stroke-width="54" stroke-linecap="round"/>
+  <!-- A sitting inside the C -->
+  <path d="M322 515 L400 310 L478 515" fill="none" stroke="#F2A93B" stroke-width="44" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M350 450 H450" stroke="#F2A93B" stroke-width="38" stroke-linecap="round"/>
+  <!-- star beside, in the C's opening -->
+  <path d="M590 335 l20 -45 l20 45 l45 20 l-45 20 l-20 45 l-20 -45 l-45 -20 z" fill="#ffffff"/>
+</svg>
