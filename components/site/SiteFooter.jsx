@@ -1,11 +1,13 @@
 import Link from "next/link";
 import Logo from "./Logo";
-import { TOOLS, FULL_SERVICES, serviceHref } from "@/lib/site/content";
+import { TOOLS, FULL_SERVICES, serviceHref, whatsappHref } from "@/lib/site/content";
+import WhatsAppButton from "./WhatsAppButton";
 import { LEGAL } from "@/lib/legal";
 
 export default function SiteFooter() {
   return (
     <footer className="border-t border-line bg-white">
+      <WhatsAppButton />
       <div className="mx-auto grid max-w-6xl gap-10 px-6 py-14 sm:grid-cols-2 lg:grid-cols-4">
         <div>
           <Link href="/" className="flex items-center gap-2.5 text-ink">
@@ -24,6 +26,7 @@ export default function SiteFooter() {
             ["Privacy Policy", "/privacy"],
             ["Terms of Service", "/terms"],
             [`Contact: ${LEGAL.contactEmail}`, `mailto:${LEGAL.contactEmail}`],
+            ["WhatsApp: +256 784 335 273", whatsappHref()],
           ]}
         />
       </div>
