@@ -46,19 +46,19 @@ const ACTIONS = [
   {
     value: "generate_proposal",
     label: "Research Proposal",
-    description: "A full First-Class proposal with literature review, methodology, ethics, timeline, references and ready-to-use data tools.",
+    description: "A full, well-structured proposal with literature review, methodology, ethics, timeline, references and ready-to-use data tools.",
     paywall: "tier_1",
   },
   {
     value: "simulate_data",
-    label: "Data Simulation",
-    description: "A 12-part package of clearly labelled simulated data and analysis, built from your approved proposal.",
+    label: "Practice Data Pack",
+    description: "A 12-part pack of clearly labelled practice data, with a guide to running the same analysis on your real data. Not for submission.",
     paywall: "tier_2_data",
   },
   {
     value: "compile_dissertation",
-    label: "Dissertation Report",
-    description: "A full 5 to 6 chapter report from your proposal and data.",
+    label: "Dissertation Draft Report",
+    description: "A structured 5 to 6 chapter draft from your proposal and data, with notes on where your own input must go.",
     paywall: "tier_3_dissertation",
   },
 ];
@@ -73,13 +73,13 @@ const DOC_TYPE_LABELS = {
 const PRICING = {
   once: [
     { key: "proposal_single", name: "Premium Proposal Draft", price: 80, blurb: "One complete research proposal." },
-    { key: "data_simulation_single", name: "Empirical Field Data Simulation", price: 135, blurb: "One full data generation run." },
-    { key: "dissertation_single", name: "Distinction-Grade Dissertation Report", price: 540, blurb: "One complete dissertation report." },
+    { key: "data_simulation_single", name: "Practice Data Pack", price: 135, blurb: "One practice data pack with a real-data guide." },
+    { key: "dissertation_single", name: "Dissertation Draft Report", price: 540, blurb: "One structured dissertation draft for you to finish." },
   ],
   monthly: [
     { key: "proposal_architect", name: "Proposal Architect", price: 70, blurb: "5 proposals every month." },
-    { key: "data_suite", name: "Data Suite", price: 110, blurb: "5 proposals plus the data simulation engine." },
-    { key: "consultant_enterprise", name: "Consultant Enterprise", price: 400, blurb: "Unlimited proposals, 3 dissertations and data simulation." },
+    { key: "data_suite", name: "Data Suite", price: 110, blurb: "5 proposals plus the Practice Data Pack." },
+    { key: "consultant_enterprise", name: "Consultant Enterprise", price: 400, blurb: "Unlimited proposals, 3 dissertation drafts and practice data." },
   ],
 };
 
@@ -1843,7 +1843,7 @@ export default function DashboardPage() {
 
               {action === "simulate_data" && (
                 <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                  Disclaimer: the data generated here is simulated. It is for pilots, instrument testing and teaching. The participants are not real.
+                  Practice data, not for submission: the data generated here is for planning and rehearsing your analysis, pilots and teaching. The participants are not real, and it must not be presented as data you collected.
                 </p>
               )}
 
@@ -2071,7 +2071,7 @@ export default function DashboardPage() {
                     max={ALLOTMENT.dissertations[plan.tier] ?? 1}
                   />
                   <CreditGauge
-                    label="Data simulations"
+                    label="Practice data packs"
                     remaining={credits.data_simulations.remaining}
                     unlimited={credits.data_simulations.included_in_plan}
                     unlimitedLabel="Included"

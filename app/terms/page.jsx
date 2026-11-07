@@ -46,8 +46,8 @@ export default function TermsPage() {
         <LegalList
           items={[
             "Research proposals, including the supporting data collection tools.",
-            "Simulated data packages for pilots, instrument testing and teaching.",
-            "Reports compiled from the proposal, data and notes that you supply.",
+            "Practice data packs for planning and rehearsing analysis, pilots, instrument testing and teaching. They are not for submission.",
+            "Dissertation draft reports structured from the proposal, data and notes that you supply, for you to complete with your own input.",
             "A free preview of a proposal, so you can see the quality before you unlock the full document.",
           ]}
         />
@@ -74,9 +74,10 @@ export default function TermsPage() {
 
       <LegalSection title="6. Simulated data">
         <p>
-          The data generated in a data simulation package is simulated. It is intended for pilots, instrument testing
-          and teaching. The participants are not real, and it is not real field data. Every package says so, and each
-          simulated item is marked SIMULATED. Reports compiled from simulated data state this clearly.
+          The data in a Practice Data Pack is simulated practice data. It is intended for planning and rehearsing
+          analysis, pilots, instrument testing and teaching, and it is not for submission. The participants are not
+          real, and it is not real field data. Every pack says so, and each item is marked PRACTICE DATA: NOT FOR
+          SUBMISSION. Draft reports built on practice data state this clearly on the cover and in every chapter.
         </p>
       </LegalSection>
 

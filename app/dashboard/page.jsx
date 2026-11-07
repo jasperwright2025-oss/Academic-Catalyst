@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { getBillingStatus, getActiveJob, listDocuments, waitForJob, isUnauthorized } from "@/lib/api/client";
 import { TOOLS } from "@/lib/site/content";
 
-const TYPE_LABELS = { proposal: "Research proposal", field_data: "Data simulation", dissertation: "Dissertation report" };
+const TYPE_LABELS = { proposal: "Research proposal", field_data: "Practice data pack", dissertation: "Dissertation draft report" };
 
 function greeting() {
   const hour = Number(new Intl.DateTimeFormat("en-GB", { hour: "numeric", hour12: false, timeZone: "Africa/Kampala" }).format(new Date()));
@@ -85,7 +85,7 @@ export default function DashboardHome() {
         },
         { label: "Dissertation credits", value: String(c.dissertations.remaining), note: "Included with Consultant Enterprise" },
         {
-          label: "Data simulations",
+          label: "Practice data packs",
           value: c.data_simulations.included_in_plan ? "Included" : String(c.data_simulations.remaining),
           note: "Included with Data Suite",
         },
