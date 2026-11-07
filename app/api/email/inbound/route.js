@@ -2,7 +2,8 @@
 // @academic-catalyst.app addresses (support@, admin@, ...) to a Gmail inbox.
 //
 // Environment variables:
-//   RESEND_API_KEY         already set; used to read the received email and send the forward
+//   RESEND_API_KEY         already set (sending-only key); used to send the forward
+//   RESEND_INBOUND_API_KEY full-access key; used only to read received emails and attachments
 //   RESEND_WEBHOOK_SECRET  the webhook's signing secret from the Resend dashboard (whsec_...)
 //   INBOUND_FORWARD_TO     optional; defaults to jasperwright2025@gmail.com
 import crypto from "node:crypto";
@@ -48,12 +49,12 @@ function escapeHtml(s) {
   return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 }
 
-async function resendFetch(path, init = {}) {
+async function resendFetch(path, init = {}, key = process.env.RESEND_API_KEY) {
   let res;
   try {
     res = await fetch(`https://api.resend.com${path}`, {
       ...init,
-      headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, "Content-Type": "application/json", ...(init.headers || {}) },
+      headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json", ...(init.headers || {}) },
     });
   } catch (err) {
     return { ok: false, status: 0, json: null, text: `network error: ${err?.message}` };
@@ -66,7 +67,8 @@ async function resendFetch(path, init = {}) {
 
 export async function POST(request) {
   const secret = process.env.RESEND_WEBHOOK_SECRET;
-  if (!secret || !process.env.RESEND_API_KEY) {
+  const readKey = process.env.RESEND_INBOUND_API_KEY;
+  if (!secret || !process.env.RESEND_API_KEY || !readKey) {
     return NextResponse.json({ error: "Inbound forwarding is not configured" }, { status: 503 });
   }
 
@@ -86,7 +88,7 @@ export async function POST(request) {
   if (!emailId || ours.length === 0) return NextResponse.json({ ignored: "not for our domain" });
 
   // Fetch the full message (webhooks carry metadata only).
-  const got = await resendFetch(`/emails/receiving/${encodeURIComponent(emailId)}`);
+  const got = await resendFetch(`/emails/receiving/${encodeURIComponent(emailId)}`, {}, readKey);
   if (!got.ok) {
     console.error("Inbound fetch failed:", got.status, got.text.slice(0, 200));
     // 500 makes Resend retry later.
@@ -101,7 +103,7 @@ export async function POST(request) {
 
   // Attachments: pass through by URL where Resend provides one.
   let attachments = [];
-  const att = await resendFetch(`/emails/receiving/${encodeURIComponent(emailId)}/attachments`);
+  const att = await resendFetch(`/emails/receiving/${encodeURIComponent(emailId)}/attachments`, {}, readKey);
   if (att.ok) {
     const items = att.json?.data || [];
     attachments = items
