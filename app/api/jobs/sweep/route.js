@@ -33,7 +33,9 @@ export async function GET(request) {
   }
 
   const stalled = (jobs || []).filter((job) => !job.locked_until || new Date(job.locked_until).getTime() < now);
-  const origin = new URL(request.url).origin;
+  // Cron calls arrive on the deployment's own *.vercel.app address, which Vercel Authentication
+  // protects (401). Hand jobs over through the public site address instead.
+  const origin = (process.env.NEXT_PUBLIC_SITE_URL || "").replace(/\/+$/, "") || new URL(request.url).origin;
   after(() => Promise.all(stalled.map((job) => kickJob(origin, job.id))));
 
   return NextResponse.json({ restarted: stalled.length });
