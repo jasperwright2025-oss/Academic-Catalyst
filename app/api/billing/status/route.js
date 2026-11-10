@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { PRODUCTS } from "@/lib/payments/catalog";
 import { FREE_PREVIEW_LIMIT } from "@/lib/documents/preview";
-import { effectiveTier, normalizeSubscription } from "@/lib/payments/plan";
+import { effectiveTier } from "@/lib/payments/plan";
+import { SUBSCRIPTION_SELECT, creditSummary } from "@/lib/payments/credits";
 import { isAdminUser } from "@/lib/admin";
 
 export const dynamic = "force-dynamic";
@@ -36,9 +37,7 @@ export async function GET() {
     // ---------- 2. Subscription (RLS limits this to the signed-in user) ----------
     const { data: sub, error: subErr } = await supabase
       .from("subscriptions")
-      .select(
-        "tier, proposals_remaining, dissertations_remaining, data_simulations_remaining, free_previews_used, plan_expires_at"
-      )
+      .select(SUBSCRIPTION_SELECT)
       .eq("user_id", user.id)
       .maybeSingle();
 
@@ -52,9 +51,11 @@ export async function GET() {
 
     // A user with no row yet is treated as free with no credits.
     const tier = effectiveTier(sub);
-    const proposals = normalizeSubscription(sub).proposals_remaining;
-    const dissertations = sub?.dissertations_remaining ?? 0;
-    const simulations = sub?.data_simulations_remaining ?? 0;
+    // Totals across the general balance and every level; by_level shows the split.
+    const summary = creditSummary(sub);
+    const proposals = summary.proposal.total;
+    const dissertations = summary.dissertation.total;
+    const simulations = summary.simulation.total;
     const previewsRemaining = Math.max(0, FREE_PREVIEW_LIMIT - (sub?.free_previews_used ?? 0));
 
     const isEnterprise = tier === "consultant_enterprise";
@@ -94,11 +95,12 @@ export async function GET() {
           expires_at: tier === "free" ? null : sub?.plan_expires_at ?? null,
         },
         credits: {
-          proposals: { remaining: proposals, unlimited: isEnterprise },
-          dissertations: { remaining: dissertations, unlimited: false },
+          proposals: { remaining: proposals, unlimited: isEnterprise, by_level: summary.proposal },
+          dissertations: { remaining: dissertations, unlimited: false, by_level: summary.dissertation },
           data_simulations: {
             remaining: simulations,
             included_in_plan: hasDataSuite,
+            by_level: summary.simulation,
           },
           free_previews_remaining: previewsRemaining,
         },

@@ -1,14 +1,15 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { normalizeSubscription } from "@/lib/payments/plan";
+import { spendCredit, refundCredit } from "@/lib/payments/credits";
+import { normaliseLevel } from "@/lib/payments/levels";
 import { logDocumentEvent } from "@/lib/documents/events";
 
 export const dynamic = "force-dynamic";
 
 /**
  * POST /api/documents/:id/unlock
- * Spends one proposal credit (Consultant Enterprise spends none), moves the saved full text
+ * Spends one proposal credit for the document's level (Consultant Enterprise spends none), moves the saved full text
  * from the locked store into the document, and returns the full document.
  * With no credit left it answers PAYWALL_TRIGGERED so the page can open the payment popup.
  */
@@ -57,85 +58,53 @@ export async function POST(request, { params }) {
       );
     }
 
-    // ---------- 2. Check and spend a credit ----------
+    // ---------- 2. Load the locked copy and its level (server-only table) ----------
     const admin = createAdminClient();
-    const { data: sub, error: subErr } = await admin
-      .from("subscriptions")
-      .select("tier, proposals_remaining, plan_expires_at")
-      .eq("user_id", user.id)
-      .maybeSingle();
-
-    if (subErr || !sub) {
-      console.error("Unlock subscription error:", subErr);
-      return NextResponse.json(
-        { error: "DATABASE_ERROR", message: "Could not verify your plan." },
-        { status: 500 }
-      );
-    }
-
-    Object.assign(sub, normalizeSubscription(sub));
-    const isEnterprise = sub.tier === "consultant_enterprise";
-    const creditsBefore = sub.proposals_remaining ?? 0;
-
-    if (!isEnterprise) {
-      if (creditsBefore <= 0) {
-        return NextResponse.json(
-          {
-            error: "PAYWALL_TRIGGERED",
-            target: "tier_1",
-            message: "Buy a proposal or subscribe to unlock the full document.",
-          },
-          { status: 403 }
-        );
-      }
-
-      // Only succeeds if the balance is still what we just read (stops double spending).
-      const { data: spent, error: spendErr } = await admin
-        .from("subscriptions")
-        .update({ proposals_remaining: creditsBefore - 1 })
-        .eq("user_id", user.id)
-        .eq("proposals_remaining", creditsBefore)
-        .select("user_id");
-
-      if (spendErr || !spent || spent.length === 0) {
-        console.error("Unlock credit spend error:", spendErr);
-        return NextResponse.json(
-          { error: "CONFLICT", message: "Please try again in a moment." },
-          { status: 409 }
-        );
-      }
-    }
-
-    const refund = async () => {
-      if (!isEnterprise) {
-        await admin
-          .from("subscriptions")
-          .update({ proposals_remaining: creditsBefore })
-          .eq("user_id", user.id);
-      }
-    };
-
-    // ---------- 3. Move the full text into the document ----------
     const { data: secret, error: secretErr } = await admin
       .from("document_secrets")
-      .select("content")
+      .select("content, academic_level")
       .eq("document_id", String(doc.id))
       .maybeSingle();
 
     if (secretErr || !secret?.content) {
       console.error("Unlock locked-content error:", secretErr);
-      await refund();
       return NextResponse.json(
         { error: "DATABASE_ERROR", message: "The full document could not be found. You have not been charged." },
         { status: 500 }
       );
     }
+    const level = normaliseLevel(secret.academic_level);
 
+    // ---------- 3. Spend a credit for this level (a higher level or a plan also covers it) ----------
+    const spent = await spendCredit(admin, user.id, "proposal", level);
+    if (!spent.ok) {
+      if (spent.reason === "NO_CREDIT") {
+        return NextResponse.json(
+          {
+            error: "PAYWALL_TRIGGERED",
+            target: "tier_1",
+            level,
+            message: "Buy a proposal at this level or subscribe to unlock the full document.",
+          },
+          { status: 403 }
+        );
+      }
+      console.error("Unlock credit spend error:", spent.reason, spent.error);
+      return NextResponse.json(
+        { error: "CONFLICT", message: "Please try again in a moment." },
+        { status: 409 }
+      );
+    }
+
+    const refund = () => refundCredit(admin, user.id, spent.column);
+
+    // ---------- 4. Move the full text into the document ----------
     const { data: unlocked, error: unlockErr } = await admin
       .from("documents")
       .update({ generated_content: secret.content, is_unlocked: true })
       .eq("id", doc.id)
       .eq("user_id", user.id)
+      .eq("is_unlocked", false) // a second, simultaneous unlock gets no row and is refunded
       .select("id");
 
     if (unlockErr || !unlocked || unlocked.length === 0) {

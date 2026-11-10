@@ -31,6 +31,8 @@ import FileUpload from "@/components/app/FileUpload";
 import ReportLink from "@/components/app/ReportLink";
 import { splitClarity } from "@/lib/documents/clarity";
 import CoverDetailsPanel from "@/components/CoverDetailsPanel";
+import { PRODUCTS, singleProductKey } from "@/lib/payments/catalog";
+import { LEVELS, DEFAULT_LEVEL, LEVEL_LABELS, WORD_ALLOWANCE, KIND_FOR_ACTION } from "@/lib/payments/levels";
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -69,19 +71,46 @@ const DOC_TYPE_LABELS = {
   dissertation: "Dissertation",
 };
 
-// Display prices only. The server catalog (lib/payments/catalog.js) is the source of truth.
-const PRICING = {
-  once: [
-    { key: "proposal_single", name: "Premium Proposal Draft", price: 80, blurb: "One complete research proposal." },
-    { key: "data_simulation_single", name: "Practice Data Pack", price: 135, blurb: "One practice data pack with a real-data guide." },
-    { key: "dissertation_single", name: "Dissertation Draft Report", price: 540, blurb: "One structured dissertation draft for you to finish." },
-  ],
-  monthly: [
-    { key: "proposal_architect", name: "Proposal Architect", price: 70, blurb: "5 proposals every month." },
-    { key: "data_suite", name: "Data Suite", price: 110, blurb: "5 proposals plus the Practice Data Pack." },
-    { key: "consultant_enterprise", name: "Consultant Enterprise", price: 400, blurb: "Unlimited proposals, 3 dissertation drafts and practice data." },
-  ],
+// Prices come from the server catalog (lib/payments/catalog.js); the server charges from it too.
+const KIND_NAMES = {
+  proposal: "Research Proposal",
+  simulation: "Practice Data Pack",
+  dissertation: "Dissertation Draft Report",
 };
+const KIND_FOR_TARGET = { tier_1: "proposal", tier_2_data: "simulation", tier_3_dissertation: "dissertation" };
+
+// The single purchase of one kind of document at one academic level.
+function singleOffer(kind, level) {
+  const key = singleProductKey(kind, level);
+  const cap = WORD_ALLOWANCE[kind]?.[level];
+  return {
+    key,
+    name: KIND_NAMES[kind],
+    price: PRODUCTS[key].amount,
+    blurb: cap
+      ? `Up to ${cap.toLocaleString("en-GB")} words in the main body.`
+      : "One practice dataset sized for this level, with a guide to analysing your real data.",
+  };
+}
+
+const MONTHLY_PLANS = [
+  { key: "proposal_architect", name: "Proposal Architect", price: 70, blurb: "5 proposals every month, at any level." },
+  { key: "data_suite", name: "Data Suite", price: 110, blurb: "5 proposals at any level, plus Practice Data Packs." },
+  { key: "consultant_enterprise", name: "Consultant Enterprise", price: 400, blurb: "Unlimited proposals, 3 dissertation drafts and practice data, at any level." },
+];
+
+// Whether the user can get a document of this kind and level without paying again.
+// A credit covers its own level and any lower level; plan credits cover every level.
+const CREDIT_KEY = { proposal: "proposals", dissertation: "dissertations", simulation: "data_simulations" };
+function hasCreditFor(credits, kind, level) {
+  const c = credits?.[CREDIT_KEY[kind]];
+  if (!c) return false;
+  if (c.unlimited || c.included_in_plan) return true;
+  const b = c.by_level;
+  if (!b) return c.remaining > 0;
+  const from = Math.max(0, LEVELS.indexOf(level));
+  return b.general > 0 || LEVELS.slice(from).some((l) => b[l] > 0);
+}
 
 // Monthly allotments, used only to scale the credit gauges.
 const ALLOTMENT = {
@@ -834,9 +863,15 @@ function ClarityNote({ note }) {
 // ---------------------------------------------------------------------------
 // Paywall modal (tabs: pay once / monthly plans; methods: cards + mobile money, crypto)
 // ---------------------------------------------------------------------------
-function PaywallModal({ target, onClose, onUnauthorized, onPaid }) {
+function PaywallModal({ target, level, onClose, onUnauthorized, onPaid }) {
   const offer = target ? PAYWALL_OFFERS[target] : null;
-  const highlighted = offer ? [offer.single, offer.subscription] : [];
+  const [lvl, setLvl] = useState(LEVELS.includes(level) ? level : DEFAULT_LEVEL);
+  const offerKind = target ? KIND_FOR_TARGET[target] : null;
+  const highlighted = offer ? [singleProductKey(offerKind, lvl), offer.subscription] : [];
+  const products = {
+    once: ["proposal", "simulation", "dissertation"].map((k) => singleOffer(k, lvl)),
+    monthly: MONTHLY_PLANS,
+  };
 
   const [tab, setTab] = useState("once");
   const [method, setMethod] = useState(SHOW_CARD_PAYMENTS ? "card" : "momo");
@@ -935,7 +970,7 @@ function PaywallModal({ target, onClose, onUnauthorized, onPaid }) {
               {offer ? offer.title : "Add credits or upgrade your plan"}
             </h2>
             <p className="mt-1 text-sm text-slate-600">
-              Pay once for a single document, or subscribe for a monthly allowance.
+              Pay once for a single document at your level, or subscribe for a monthly allowance at any level.
             </p>
           </div>
           <button
@@ -969,6 +1004,25 @@ function PaywallModal({ target, onClose, onUnauthorized, onPaid }) {
           ))}
         </div>
 
+        {tab === "once" && (
+          <div role="radiogroup" aria-label="Academic level" className="mt-4 flex flex-wrap gap-2">
+            {LEVELS.map((l) => (
+              <button
+                key={l}
+                type="button"
+                role="radio"
+                aria-checked={lvl === l}
+                onClick={() => setLvl(l)}
+                className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
+                  lvl === l ? "border-brand bg-mint text-brand-dark" : "border-slate-200 text-slate-600 hover:border-slate-300"
+                }`}
+              >
+                {LEVEL_LABELS[l]}
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* Payment method */}
         <div role="radiogroup" aria-label="Payment method" className={`mt-4 grid gap-3 ${SHOW_CARD_PAYMENTS ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
           {SHOW_CARD_PAYMENTS && methodTile("card", "Card", "Visa and Mastercard, paid in US dollars.", false)}
@@ -985,7 +1039,7 @@ function PaywallModal({ target, onClose, onUnauthorized, onPaid }) {
 
         {/* Products */}
         <div className="mt-5 grid gap-4 md:grid-cols-3">
-          {PRICING[tab].map((product) => {
+          {products[tab].map((product) => {
             const isHighlighted = highlighted.includes(product.key);
             return (
               <div
@@ -1161,7 +1215,7 @@ function DocumentModal({ docId, onClose, onUnauthorized, onChanged, onPaywall, c
       onChanged?.();
     } catch (err) {
       if (isUnauthorized(err)) onUnauthorized();
-      else if (isPaywall(err)) onPaywall?.();
+      else if (isPaywall(err)) onPaywall?.(err.data?.level);
       else setUnlockError(err.message || "Could not unlock the document.");
     } finally {
       setUnlocking(false);
@@ -1278,6 +1332,7 @@ export default function DashboardPage() {
 
   // Generator form
   const [action, setAction] = useState("generate_proposal");
+  const [level, setLevel] = useState(DEFAULT_LEVEL);
   const [topic, setTopic] = useState("");
   const [institution, setInstitution] = useState("");
   // A project from the planning tools (/dashboard/write?project=...): its work goes into the proposal.
@@ -1300,7 +1355,7 @@ export default function DashboardPage() {
   const [unlockError, setUnlockError] = useState("");
 
   // Overlays and banners
-  const [paywall, setPaywall] = useState(null); // { target } or null
+  const [paywall, setPaywall] = useState(null); // { target, level } or null
   const [viewDocId, setViewDocId] = useState(null);
   const [banner, setBanner] = useState(null); // { kind, text }
 
@@ -1501,13 +1556,14 @@ export default function DashboardPage() {
     }
 
     // Skip the round trip when we already know the user has no access.
-    if (billing?.can_generate?.[action] === false) {
-      setPaywall({ target: current.paywall });
+    if (billing && !canGenerateNow) {
+      setPaywall({ target: current.paywall, level });
       return;
     }
 
     const payload = {
       action_type: action,
+      level,
       research_topic: topic.trim(),
       target_institution: institution.trim(),
       project_background: sample.trim(),
@@ -1532,7 +1588,7 @@ export default function DashboardPage() {
       if (isUnauthorized(err)) {
         goToLogin();
       } else if (isPaywall(err)) {
-        setPaywall({ target: err.data?.target || current.paywall });
+        setPaywall({ target: err.data?.target || current.paywall, level: err.data?.level || level });
       } else if (isJobInProgress(err) && err.data?.job_id) {
         // A document is already being written: show its progress instead.
         setJobProgress({ stage_label: "Picking up your document in progress" });
@@ -1568,6 +1624,7 @@ export default function DashboardPage() {
       documentId: data.document_id,
       sections: data.locked_sections || [],
       totalWords: data.total_words || null,
+      level,
     });
     setUnlockError("");
     refreshBilling();
@@ -1610,7 +1667,7 @@ export default function DashboardPage() {
   async function handleUnlockResult() {
     if (!result?.documentId || unlocking) return;
     if (billing && !hasProposalCredit) {
-      setPaywall({ target: "tier_1" });
+      setPaywall({ target: "tier_1", level: result.level || level });
       return;
     }
     setUnlocking(true);
@@ -1622,7 +1679,7 @@ export default function DashboardPage() {
       refreshDocs(page, typeFilter);
     } catch (err) {
       if (isUnauthorized(err)) goToLogin();
-      else if (isPaywall(err)) setPaywall({ target: err.data?.target || "tier_1" });
+      else if (isPaywall(err)) setPaywall({ target: err.data?.target || "tier_1", level: err.data?.level || level });
       else setUnlockError(err.message || "Could not unlock the document.");
     } finally {
       setUnlocking(false);
@@ -1632,14 +1689,15 @@ export default function DashboardPage() {
   const currentAction = ACTIONS.find((a) => a.value === action);
   const plan = billing?.plan;
   const credits = billing?.credits;
+  // Any proposal credit: the server then checks that it covers the document's level.
   const hasProposalCredit = Boolean(
     credits && (credits.proposals.unlimited || credits.proposals.remaining > 0)
   );
-  const previewOnly =
-    action === "generate_proposal" &&
-    Boolean(credits) &&
-    !hasProposalCredit &&
-    (credits.free_previews_remaining ?? 0) > 0;
+  const kind = KIND_FOR_ACTION[action];
+  const hasLevelCredit = hasCreditFor(credits, kind, level);
+  const previewsLeft = (credits?.free_previews_remaining ?? 0) > 0;
+  const canGenerateNow = hasLevelCredit || (action === "generate_proposal" && previewsLeft);
+  const previewOnly = action === "generate_proposal" && Boolean(credits) && !hasLevelCredit && previewsLeft;
 
   return (
     <div className="min-h-screen">
@@ -1756,6 +1814,37 @@ export default function DashboardPage() {
                     </button>
                   );
                 })}
+              </div>
+
+              <div>
+                <span id="level-label" className="block text-sm font-medium text-slate-700">Academic level</span>
+                <div role="radiogroup" aria-labelledby="level-label" className="mt-1 grid gap-2 sm:grid-cols-3">
+                  {LEVELS.map((l) => {
+                    const offer = singleOffer(kind, l);
+                    const cap = WORD_ALLOWANCE[kind]?.[l];
+                    return (
+                      <button
+                        key={l}
+                        type="button"
+                        role="radio"
+                        aria-checked={level === l}
+                        disabled={generating}
+                        onClick={() => setLevel(l)}
+                        className={`rounded-xl border p-3 text-left transition ${
+                          level === l ? "border-brand bg-mint ring-2 ring-[#BFE0D6]" : "border-slate-200 hover:border-slate-300"
+                        }`}
+                      >
+                        <span className="block text-sm font-semibold text-slate-900">{LEVEL_LABELS[l]}</span>
+                        <span className="mt-0.5 block text-xs text-slate-600">
+                          {cap ? `Up to ${cap.toLocaleString("en-GB")} words` : "Sized for this level"} · ${offer.price}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="mt-1 text-xs text-slate-500">
+                  The level sets the length and depth. Need a longer document? Choose the next level up.
+                </p>
               </div>
 
               <div className="grid gap-4 sm:grid-cols-2">
@@ -1932,7 +2021,7 @@ export default function DashboardPage() {
               >
                 {generating
                   ? "Writing your document..."
-                  : billing?.can_generate?.[action] === false
+                  : billing && !canGenerateNow
                   ? "Unlock to generate"
                   : previewOnly
                   ? "Generate free preview"
@@ -2212,6 +2301,7 @@ export default function DashboardPage() {
       {paywall && (
         <PaywallModal
           target={paywall.target}
+          level={paywall.level || level}
           onClose={() => setPaywall(null)}
           onUnauthorized={goToLogin}
           onPaid={() => {
@@ -2234,9 +2324,9 @@ export default function DashboardPage() {
             refreshBilling();
             refreshDocs(page, typeFilter);
           }}
-          onPaywall={() => {
+          onPaywall={(docLevel) => {
             setViewDocId(null);
-            setPaywall({ target: "tier_1" });
+            setPaywall({ target: "tier_1", level: docLevel || level });
           }}
           canUseCredit={hasProposalCredit}
         />

@@ -3,6 +3,8 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { FREE_PREVIEW_LIMIT } from '@/lib/documents/preview';
 import { normalizeSubscription } from '@/lib/payments/plan';
+import { SUBSCRIPTION_SELECT, canPay } from '@/lib/payments/credits';
+import { KIND_FOR_ACTION, normaliseLevel } from '@/lib/payments/levels';
 import { stagesFor } from '@/lib/generation/stages';
 import { kickJob, ACTIVE_STATUSES } from '@/lib/generation/runner';
 import { planningWork } from '@/lib/tools/projectText';
@@ -78,6 +80,9 @@ export async function POST(request) {
       source_material, // optional: extra papers or notes for a proposal
       uploaded_transcripts, // optional: interview transcripts for a dissertation
     } = body;
+    // Academic level decides the price, the word allowance and the depth. Defaults to master's.
+    const level = normaliseLevel(body.level);
+    const kind = KIND_FOR_ACTION[action_type];
 
     if (!VALID_ACTIONS.includes(action_type)) {
       return NextResponse.json(
@@ -113,7 +118,7 @@ export async function POST(request) {
     // ---------- 3. Load subscription (RLS scopes this to the signed-in user) ----------
     const { data: sub, error: subErr } = await supabase
       .from('subscriptions')
-      .select('tier, proposals_remaining, dissertations_remaining, data_simulations_remaining, free_previews_used, plan_expires_at')
+      .select(SUBSCRIPTION_SELECT)
       .eq('user_id', userId)
       .single();
 
@@ -128,19 +133,20 @@ export async function POST(request) {
     Object.assign(sub, normalizeSubscription(sub));
 
     // ---------- 4. Paywall checks ----------
-    const isEnterprise = sub.tier === 'consultant_enterprise';
-    const hasDataTier = sub.tier === 'data_suite' || isEnterprise;
+    // A credit for this level (or a higher one), a general credit, or a plan that includes it.
+    const paid = canPay(sub, kind, level);
 
-    // Proposals: with no credits left, a user gets a limited number of free PREVIEWS
+    // Proposals: with no credit for the level, a user gets a limited number of free PREVIEWS
     // (a few pages shown, the rest locked until they unlock it).
     let previewMode = false;
     if (action_type === 'generate_proposal') {
-      if (!isEnterprise && sub.proposals_remaining <= 0) {
+      if (!paid) {
         if ((sub.free_previews_used ?? 0) >= FREE_PREVIEW_LIMIT) {
           return NextResponse.json(
             {
               error: 'PAYWALL_TRIGGERED',
               target: 'tier_1',
+              level,
               message: 'You have used your free preview. Buy a proposal or subscribe to continue.',
             },
             { status: 403 }
@@ -167,12 +173,12 @@ export async function POST(request) {
         previewMode = true;
       }
     } else if (action_type === 'simulate_data') {
-      if (!hasDataTier && !(sub.data_simulations_remaining > 0)) {
-        return NextResponse.json({ error: 'PAYWALL_TRIGGERED', target: 'tier_2_data' }, { status: 403 });
+      if (!paid) {
+        return NextResponse.json({ error: 'PAYWALL_TRIGGERED', target: 'tier_2_data', level }, { status: 403 });
       }
     } else if (action_type === 'compile_dissertation') {
-      if (!isEnterprise && sub.dissertations_remaining <= 0) {
-        return NextResponse.json({ error: 'PAYWALL_TRIGGERED', target: 'tier_3_dissertation' }, { status: 403 });
+      if (!paid) {
+        return NextResponse.json({ error: 'PAYWALL_TRIGGERED', target: 'tier_3_dissertation', level }, { status: 403 });
       }
     }
 
@@ -228,6 +234,7 @@ export async function POST(request) {
     const clip = (value, max) => String(value ?? '').trim().slice(0, max);
 
     const input = {
+      level,
       research_topic: clip(research_topic, 2000),
       target_institution: clip(target_institution, 4000),
       project_background: clip(project_background ?? writing_sample, 4000),

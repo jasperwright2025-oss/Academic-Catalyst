@@ -2,7 +2,11 @@ import Link from "next/link";
 import SiteHeader from "@/components/site/SiteHeader";
 import SiteFooter from "@/components/site/SiteFooter";
 import PlanGrid from "@/components/site/PlanGrid";
-import { SITE, SINGLE_PRICES } from "@/lib/site/content";
+import LevelPriceTable from "@/components/site/LevelPriceTable";
+import { SITE } from "@/lib/site/content";
+
+// Shilling prices use the exchange rate set on the server; refresh hourly.
+export const revalidate = 3600;
 
 export const metadata = {
   title: "Pricing",
@@ -12,7 +16,8 @@ export const metadata = {
 const QUESTIONS = [
   ["What is free?", "Every account gets one free preview of a full research proposal. The four tools will each allow three free uses a month when they open."],
   ["How do I pay?", "By MTN or Airtel mobile money, or by USDT. Your credits appear once the payment is confirmed."],
-  ["What does a single purchase include?", "One complete document of that type, unlocked in full with a formatted Word download."],
+  ["What does a single purchase include?", "One complete document of that type at your academic level, unlocked in full with a formatted Word download."],
+  ["Why do prices differ by level?", "An undergraduate proposal is shorter and needs fewer sources than a master's or PhD proposal, so it costs less to prepare. A credit for a higher level also covers a lower one."],
   ["Can I get a refund?", "Documents that have been generated or unlocked are normally not refundable. Within 7 days you can ask for a refund or for the credit to be restored if you paid but received no credits, paid twice for the same order, or a technical fault meant no usable document was produced."],
 ];
 
@@ -24,7 +29,8 @@ export default function PricingPage() {
         <p className="text-[13px] font-semibold uppercase tracking-wider text-brand">Pricing</p>
         <h1 className="mt-3 max-w-3xl font-serif text-5xl font-medium tracking-tight">Start free. Pay when you need the full document.</h1>
         <PlanGrid />
-        <p className="mt-5 text-sm text-muted">{SINGLE_PRICES} {SITE.payment}</p>
+        <p className="mt-5 text-sm text-muted">Monthly plans cover every academic level. {SITE.payment}</p>
+        <LevelPriceTable />
 
         <section className="mt-20 max-w-3xl">
           <h2 className="font-serif text-3xl font-medium">Questions</h2>
