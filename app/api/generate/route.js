@@ -270,7 +270,7 @@ export async function POST(request) {
       }
     }
 
-    const stages = stagesFor(action_type);
+    const stages = stagesFor(action_type, level);
     const { data: job, error: jobErr } = await admin
       .from('generation_jobs')
       .insert({
