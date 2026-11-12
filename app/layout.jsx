@@ -1,5 +1,6 @@
 import "./globals.css";
 import { Analytics } from "@vercel/analytics/next";
+import UtmTracker from "@/components/UtmTracker";
 import { SITE } from "@/lib/site/content";
 
 export const metadata = {
@@ -23,6 +24,7 @@ export default function RootLayout({ children }) {
       <body className="antialiased">
         {children}
         <Analytics />
+        <UtmTracker />
       </body>
     </html>
   );
