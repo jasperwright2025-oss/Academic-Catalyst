@@ -3,6 +3,7 @@ import { LEVELS, LEVEL_LABELS, WORD_ALLOWANCE } from "@/lib/payments/levels";
 import { ugxPerUsd, ugxAmount } from "@/lib/payments/momo";
 import Link from "next/link";
 import { availableSamples } from "@/lib/site/samples";
+import { LAUNCH_OFFER, launchPrice } from "@/lib/payments/launchOffer";
 
 const ROWS = [
   ["proposal", "Research proposal"],
@@ -18,17 +19,28 @@ const WHAT_YOU_GET = {
 };
 
 // Single-purchase prices by academic level, in Uganda shillings first (at the rate set on the server).
-export default function LevelPriceTable() {
+export default function LevelPriceTable({ placesLeft = null }) {
   const rate = ugxPerUsd();
   const samples = availableSamples();
   const price = (kind, level) => {
     const usd = PRODUCTS[singleProductKey(kind, level)].amount;
     return rate ? `UGX ${ugxAmount(usd, rate).toLocaleString("en-US")}/= ($${usd})` : `$${usd}`;
   };
+  const offerPrice = (kind, level) => {
+    const usd = launchPrice(PRODUCTS[singleProductKey(kind, level)].amount);
+    return rate ? `UGX ${ugxAmount(usd, rate).toLocaleString("en-US")}/= ($${usd})` : `$${usd}`;
+  };
+  const offerOn = LAUNCH_OFFER.ACTIVE && placesLeft !== 0;
   return (
     <section className="mt-16">
       <h2 className="font-serif text-3xl font-medium">Single purchases, priced by level</h2>
       <p className="mt-2 max-w-3xl text-ink-soft">
+        {offerOn && (
+          <strong className="block text-brand">
+            Launch offer: half price on your first single purchase for our first 10 clients
+            {placesLeft != null ? ` (${placesLeft} of 10 places left)` : ""}.
+          </strong>
+        )}
         Choose your level when you start a document. Each level sets the length and depth. A postgraduate diploma is priced at the master&apos;s level.
       </p>
       <div className="mt-6 overflow-x-auto rounded-[18px] border border-line bg-white">
@@ -49,7 +61,8 @@ export default function LevelPriceTable() {
                   const cap = WORD_ALLOWANCE[kind]?.[l];
                   return (
                     <td key={l} className="px-5 py-4">
-                      <span className="block font-semibold">{price(kind, l)}</span>
+                      <span className={`block font-semibold ${offerOn ? "text-muted line-through" : ""}`}>{price(kind, l)}</span>
+                      {offerOn && <span className="block font-semibold text-brand">Launch price: {offerPrice(kind, l)}</span>}
                       {cap && <span className="block text-xs text-muted">Up to {cap.toLocaleString("en-GB")} words</span>}
                     </td>
                   );

@@ -5,6 +5,8 @@ import { FREE_PREVIEW_LIMIT } from "@/lib/documents/preview";
 import { effectiveTier } from "@/lib/payments/plan";
 import { SUBSCRIPTION_SELECT, creditSummary } from "@/lib/payments/credits";
 import { isAdminUser } from "@/lib/admin";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { launchOfferState } from "@/lib/payments/launchOffer";
 
 export const dynamic = "force-dynamic";
 
@@ -80,9 +82,19 @@ export async function GET() {
       }));
     }
 
+    // ---------- 4. Launch offer (non-fatal) ----------
+    let launchOffer = { active: false, places_left: 0, eligible: false };
+    try {
+      const st = await launchOfferState(createAdminClient(), user.id);
+      launchOffer = { active: st.active, places_left: st.placesLeft, eligible: st.eligible };
+    } catch (err) {
+      console.error("Launch offer state error:", err);
+    }
+
     return NextResponse.json(
       {
         success: true,
+        launch_offer: launchOffer,
         is_admin: isAdminUser(user),
         plan: {
           tier,

@@ -1,12 +1,20 @@
 import Link from "next/link";
 import Logo from "./Logo";
 import { TOOLS, FULL_SERVICES, serviceHref } from "@/lib/site/content";
+import { LAUNCH_OFFER } from "@/lib/payments/launchOffer";
 
 const linkClass = "text-ink hover:text-brand";
 
 // Works without JavaScript: the menus are <details> elements.
 export default function SiteHeader() {
   return (
+    <>
+    {LAUNCH_OFFER.ACTIVE && (
+      <p className="bg-brand px-6 py-2 text-center text-sm text-white">
+        Launch offer: half price on your first document for our first 10 clients.{" "}
+        <Link href="/pricing" className="font-semibold underline">See prices</Link>
+      </p>
+    )}
     <header className="sticky top-0 z-40 border-b border-line bg-paper/90 backdrop-blur">
       <nav aria-label="Main" className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-6 py-4">
         <Link href="/" className="flex items-center gap-2.5 text-ink">
@@ -52,6 +60,7 @@ export default function SiteHeader() {
         </details>
       </nav>
     </header>
+    </>
   );
 }
 

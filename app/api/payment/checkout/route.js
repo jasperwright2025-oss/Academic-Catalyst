@@ -3,6 +3,7 @@ import { randomUUID } from "crypto";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { PRODUCTS } from "@/lib/payments/catalog";
+import { chargeUsd } from "@/lib/payments/launchOffer";
 import { submitOrder, pesapalDate } from "@/lib/payments/pesapal";
 
 export const runtime = "nodejs";
@@ -43,12 +44,13 @@ async function startCheckout(productKey) {
     const txRef = `ac-${randomUUID()}`; // letters, digits and dashes only, under 50 characters
     const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000").replace(/\/$/, "");
     const admin = createAdminClient();
+    const { amount: chargeAmount } = await chargeUsd(admin, user.id, productKey);
 
     const { error: insertErr } = await admin.from("transactions").insert({
       user_id: user.id,
       tx_ref: txRef,
       product_key: productKey,
-      amount: product.amount,
+      amount: chargeAmount,
       currency: product.currency,
       status: "pending",
       provider: "pesapal",
@@ -67,7 +69,7 @@ async function startCheckout(productKey) {
     const order = {
       id: txRef,
       currency: product.currency,
-      amount: product.amount,
+      amount: chargeAmount,
       description: product.label.slice(0, 100),
       callback_url: `${siteUrl}/dashboard`,
       cancellation_url: `${siteUrl}/dashboard?payment=cancelled`,

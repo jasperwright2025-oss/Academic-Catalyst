@@ -4,9 +4,11 @@ import SiteFooter from "@/components/site/SiteFooter";
 import PlanGrid from "@/components/site/PlanGrid";
 import LevelPriceTable from "@/components/site/LevelPriceTable";
 import { SITE } from "@/lib/site/content";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { launchOfferState } from "@/lib/payments/launchOffer";
 
 // Shilling prices use the exchange rate set on the server; refresh hourly.
-export const revalidate = 3600;
+export const revalidate = 600;
 
 export const metadata = {
   title: "Pricing",
@@ -21,7 +23,16 @@ const QUESTIONS = [
   ["Can I get a refund?", "Documents that have been generated or unlocked are normally not refundable. Within 7 days you can ask for a refund or for the credit to be restored if you paid but received no credits, paid twice for the same order, or a technical fault meant no usable document was produced."],
 ];
 
-export default function PricingPage() {
+async function placesLeft() {
+  try {
+    return (await launchOfferState(createAdminClient())).placesLeft;
+  } catch {
+    return null;
+  }
+}
+
+export default async function PricingPage() {
+  const left = await placesLeft();
   return (
     <div className="min-h-screen bg-paper font-sans text-ink">
       <SiteHeader />
@@ -30,7 +41,7 @@ export default function PricingPage() {
         <h1 className="mt-3 max-w-3xl font-serif text-5xl font-medium tracking-tight">Start free. Pay when you need the full document.</h1>
         <PlanGrid />
         <p className="mt-5 text-sm text-muted">Monthly plans cover every academic level. {SITE.payment}</p>
-        <LevelPriceTable />
+        <LevelPriceTable placesLeft={left} />
 
         <section className="mt-20 max-w-3xl">
           <h2 className="font-serif text-3xl font-medium">Questions</h2>

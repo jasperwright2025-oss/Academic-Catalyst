@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { PRODUCTS } from "@/lib/payments/catalog";
+import { chargeUsd } from "@/lib/payments/launchOffer";
 import {
   USDT_PROVIDER,
   ORDER_WINDOW_MS,
@@ -73,7 +74,8 @@ export async function POST(request) {
     }
 
     // ---------- 4. Create the order with its own exact amount ----------
-    const amount = await pickUniqueAmount(admin, product.amount);
+    const { amount: usd } = await chargeUsd(admin, user.id, productKey);
+    const amount = await pickUniqueAmount(admin, usd);
     const txRef = makeOrderRef();
 
     const { error: insertErr } = await admin.from("transactions").insert({

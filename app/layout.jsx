@@ -8,6 +8,8 @@ export const metadata = {
   title: { default: `${SITE.name}: research proposals with verified references`, template: `%s | ${SITE.name}` },
   description: SITE.description,
   openGraph: { title: SITE.name, description: SITE.description, url: SITE.url, siteName: SITE.name, type: "website" },
+  // Google Search Console ownership check: set GOOGLE_SITE_VERIFICATION in Vercel to the token Google gives.
+  ...(process.env.GOOGLE_SITE_VERIFICATION ? { verification: { google: process.env.GOOGLE_SITE_VERIFICATION } } : {}),
 };
 
 export default function RootLayout({ children }) {

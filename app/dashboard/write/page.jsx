@@ -863,7 +863,13 @@ function ClarityNote({ note }) {
 // ---------------------------------------------------------------------------
 // Paywall modal (tabs: pay once / monthly plans; methods: cards + mobile money, crypto)
 // ---------------------------------------------------------------------------
-function PaywallModal({ target, level, onClose, onUnauthorized, onPaid }) {
+// Launch offer: half price on a first single purchase while places last (server decides the charge).
+function launchPriceUsd(price) {
+  return Math.round(price * 50) / 100;
+}
+
+function PaywallModal({ target, level, launchOffer, onClose, onUnauthorized, onPaid }) {
+  const offerOn = Boolean(launchOffer?.eligible);
   const offer = target ? PAYWALL_OFFERS[target] : null;
   const [lvl, setLvl] = useState(LEVELS.includes(level) ? level : DEFAULT_LEVEL);
   const offerKind = target ? KIND_FOR_TARGET[target] : null;
@@ -983,6 +989,12 @@ function PaywallModal({ target, level, onClose, onUnauthorized, onPaid }) {
           </button>
         </div>
 
+        {offerOn && (
+          <p className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+            Launch offer: half price on your first single purchase. {launchOffer.places_left} of 10 places left.
+          </p>
+        )}
+
         {/* Tabs */}
         <div role="tablist" className="mt-5 inline-flex rounded-lg bg-slate-100 p-1">
           {[
@@ -1055,7 +1067,14 @@ function PaywallModal({ target, level, onClose, onUnauthorized, onPaid }) {
                 )}
                 <h3 className="text-sm font-semibold text-slate-900">{product.name}</h3>
                 <p className="mt-2 text-3xl font-bold text-slate-900">
-                  ${product.price}
+                  {offerOn && tab === "once" ? (
+                    <>
+                      ${launchPriceUsd(product.price)}{" "}
+                      <span className="text-base font-normal text-slate-400 line-through">${product.price}</span>
+                    </>
+                  ) : (
+                    <>${product.price}</>
+                  )}
                   {tab === "monthly" && <span className="text-sm font-normal text-slate-500"> /month</span>}
                 </p>
                 <p className="mt-2 flex-1 text-sm text-slate-600">{product.blurb}</p>
@@ -1065,7 +1084,7 @@ function PaywallModal({ target, level, onClose, onUnauthorized, onPaid }) {
                   disabled={Boolean(busyKey)}
                   className="mt-4 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-dark disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {busyKey === product.key ? "Redirecting..." : `Pay $${product.price}`}
+                  {busyKey === product.key ? "Redirecting..." : `Pay $${offerOn && tab === "once" ? launchPriceUsd(product.price) : product.price}`}
                 </button>
               </div>
             );
@@ -1836,7 +1855,7 @@ export default function DashboardPage() {
                       >
                         <span className="block text-sm font-semibold text-slate-900">{LEVEL_LABELS[l]}</span>
                         <span className="mt-0.5 block text-xs text-slate-600">
-                          {cap ? `Up to ${cap.toLocaleString("en-GB")} words` : "Sized for this level"} · ${offer.price}
+                          {cap ? `Up to ${cap.toLocaleString("en-GB")} words` : "Sized for this level"} · ${billing?.launch_offer?.eligible ? launchPriceUsd(offer.price) : offer.price}
                         </span>
                       </button>
                     );
@@ -2302,6 +2321,7 @@ export default function DashboardPage() {
         <PaywallModal
           target={paywall.target}
           level={paywall.level || level}
+          launchOffer={billing?.launch_offer}
           onClose={() => setPaywall(null)}
           onUnauthorized={goToLogin}
           onPaid={() => {
