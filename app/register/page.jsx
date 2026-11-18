@@ -2,7 +2,7 @@
 
 import Logo from "@/components/site/Logo";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { register, login } from "@/lib/api/client";
@@ -26,6 +26,17 @@ export default function RegisterPage() {
   const [captchaToken, setCaptchaToken] = useState("");
   const [captchaReset, setCaptchaReset] = useState(0);
   const [submitting, setSubmitting] = useState(false);
+  const [inviteCode, setInviteCode] = useState("");
+
+  // Invite links look like /register?invite=CODE
+  useEffect(() => {
+    try {
+      const code = new URLSearchParams(window.location.search).get("invite");
+      if (code) setInviteCode(code.trim().toUpperCase().slice(0, 32));
+    } catch {
+      // ignore
+    }
+  }, []);
 
   function validate() {
     if (!fullName.trim()) return "Please enter your full name.";
@@ -86,6 +97,7 @@ export default function RegisterPage() {
         password,
         full_name: fullName.trim(),
         turnstile_token: captchaToken,
+        invite_code: inviteCode || undefined,
       });
     } catch (err) {
       // The security check works only once, so bring it back for the next attempt.
@@ -151,6 +163,12 @@ export default function RegisterPage() {
         <p className="mt-1 text-sm text-slate-600">
           Start building your research proposals with Academic Catalyst.
         </p>
+        {inviteCode && (
+          <p className="mt-4 rounded-lg border border-[#F2A93B] bg-[#FFF6E8] px-3 py-2 text-sm text-ink">
+            You have been invited. Create your account and your first full research proposal is free, at any
+            level. Afterwards we would value two minutes of your feedback.
+          </p>
+        )}
 
         <form onSubmit={handleSubmit} className="mt-6 space-y-4" noValidate>
           <div>

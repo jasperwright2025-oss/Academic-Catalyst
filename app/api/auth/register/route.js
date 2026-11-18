@@ -7,7 +7,7 @@ export async function POST(request) {
   const supabase = await createClient();
 
   try {
-    const { email, password, full_name, turnstile_token } = await request.json();
+    const { email, password, full_name, turnstile_token, invite_code } = await request.json();
 
     if (!email || !password) {
       return NextResponse.json({ error: 'BAD_REQUEST', message: 'Email and password are required.' }, { status: 400 });
@@ -74,7 +74,39 @@ export async function POST(request) {
     });
     if (voiceError) console.error('Voice profile provisioning error:', voiceError.message);
 
-    return NextResponse.json({ success: true, message: 'Account provisioned successfully.' });
+    // 6. Invite link: one free full proposal (any level). Each code works once and expires.
+    let invited = false;
+    const code = String(invite_code || '').trim().toUpperCase().slice(0, 32);
+    if (code) {
+      const { data: redeemed, error: inviteError } = await adminSupabase
+        .from('invites')
+        .update({ redeemed_by: userId, redeemed_at: new Date().toISOString() })
+        .eq('code', code)
+        .is('redeemed_by', null)
+        .gt('expires_at', new Date().toISOString())
+        .select('code');
+      if (inviteError) console.error('Invite redeem error:', inviteError.message);
+      if (redeemed && redeemed.length === 1) {
+        const { error: creditError } = await adminSupabase
+          .from('subscriptions')
+          .update({ proposals_remaining: 1 })
+          .eq('user_id', userId);
+        if (creditError) {
+          console.error('Invite credit error:', creditError.message);
+          await adminSupabase.from('invites').update({ redeemed_by: null, redeemed_at: null }).eq('code', code);
+        } else {
+          invited = true;
+        }
+      }
+    }
+
+    return NextResponse.json({
+      success: true,
+      invited,
+      message: invited
+        ? 'Account created. Your invitation gives you one full proposal, free.'
+        : 'Account provisioned successfully.',
+    });
 
   } catch (error) {
     console.error('Registration API Error:', error);

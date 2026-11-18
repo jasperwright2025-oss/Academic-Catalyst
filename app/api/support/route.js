@@ -6,7 +6,7 @@ import { sendEmail } from "@/lib/email";
 export const dynamic = "force-dynamic";
 
 const SUPPORT_INBOX = process.env.SUPPORT_INBOX || "wattisimon@gmail.com";
-const TOPICS = { search: "Literature search", tools: "A planning tool", document: "A document or preview", payment: "A payment", account: "My account", other: "Something else" };
+const TOPICS = { search: "Literature search", tools: "A planning tool", document: "A document or preview", payment: "A payment", account: "My account", other: "Something else", feedback: "Feedback" };
 const DAILY_LIMIT = 5;
 const clip = (v, n) => String(v ?? "").trim().slice(0, n);
 

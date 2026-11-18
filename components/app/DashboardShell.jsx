@@ -12,6 +12,7 @@ const NAV = [
   { href: "/dashboard/write#history", label: "My documents", icon: "M7 3h7l5 5v13H7zM14 3v5h5" },
   { href: "/dashboard/tools", label: "Tools", icon: "M14 7l3-3 3 3-3 3M4 20l9-9M7 4v6M4 7h6" },
   { href: "/dashboard/write?buy=1", label: "Buy credits", icon: "M3 6h18v12H3zM3 10h18" },
+  { href: "/dashboard/feedback", label: "Give feedback", icon: "M4 5h16v11H8l-4 4zM8 9h8M8 12h5" },
   { href: "/dashboard/help", label: "Help", icon: "M12 21a9 9 0 100-18 9 9 0 000 18zM9.5 9a2.5 2.5 0 015 0c0 2-2.5 2-2.5 4M12 17h.01" },
 ];
 
