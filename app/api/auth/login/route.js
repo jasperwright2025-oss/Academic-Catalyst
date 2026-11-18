@@ -17,7 +17,7 @@ export async function POST(request) {
     });
 
     if (error || !data.user) {
-      return NextResponse.json({ error: 'LOGIN_FAILED', message: 'Invalid email or password.' }, { status: 401 });
+      return NextResponse.json({ error: 'LOGIN_FAILED', message: 'That email and password did not match an account. New to Academic Catalyst? Create a free account first, using the link below.' }, { status: 401 });
     }
 
     return NextResponse.json({ success: true, message: 'Login verification successful.' });
