@@ -118,6 +118,7 @@ export async function GET() {
         },
         can_generate: {
           generate_proposal: isEnterprise || proposals > 0 || previewsRemaining > 0,
+          improve_draft: isEnterprise || proposals > 0,
           simulate_data: hasDataSuite || simulations > 0,
           compile_dissertation: isEnterprise || dissertations > 0,
         },

@@ -52,6 +52,12 @@ const ACTIONS = [
     paywall: "tier_1",
   },
   {
+    value: "improve_draft",
+    label: "Review or complete my draft",
+    description: "Upload the proposal you have started. Get a detailed supervisor-style review, or have the missing sections written around your own text.",
+    paywall: "tier_1",
+  },
+  {
     value: "simulate_data",
     label: "Practice Data Pack",
     description: "A 12-part pack of clearly labelled practice data, with a guide to running the same analysis on your real data. Not for submission.",
@@ -1351,6 +1357,7 @@ export default function DashboardPage() {
 
   // Generator form
   const [action, setAction] = useState("generate_proposal");
+  const [draftMode, setDraftMode] = useState("review"); // "review" | "complete", for the "My draft" card
   const [level, setLevel] = useState(DEFAULT_LEVEL);
   const [topic, setTopic] = useState("");
   const [institution, setInstitution] = useState("");
@@ -1425,7 +1432,8 @@ export default function DashboardPage() {
       try {
         const { job } = await getActiveJob();
         if (cancelled || !job) return;
-        const match = ACTIONS.find((a) => a.value === job.action_type);
+        const jobAction = ["review_draft", "complete_draft"].includes(job.action_type) ? "improve_draft" : job.action_type;
+        const match = ACTIONS.find((a) => a.value === jobAction);
         if (match) setAction(match.value);
         setGenerating(true);
         setJobProgress(job);
@@ -1555,7 +1563,7 @@ export default function DashboardPage() {
       return;
     }
     if (action !== "generate_proposal" && !uploadedProposal.trim()) {
-      setGenError("Please paste your approved research proposal.");
+      setGenError(action === "improve_draft" ? "Please upload or paste your draft proposal." : "Please paste your approved research proposal.");
       return;
     }
     if (action === "compile_dissertation" && !uploadedFieldData.trim()) {
@@ -1581,7 +1589,7 @@ export default function DashboardPage() {
     }
 
     const payload = {
-      action_type: action,
+      action_type: action === "improve_draft" ? (draftMode === "complete" ? "complete_draft" : "review_draft") : action,
       level,
       research_topic: topic.trim(),
       target_institution: institution.trim(),
@@ -1804,7 +1812,7 @@ export default function DashboardPage() {
                   })()}
                 </div>
               )}
-              <div role="radiogroup" aria-label="Document type" className="grid gap-3 sm:grid-cols-3">
+              <div role="radiogroup" aria-label="Document type" className="grid gap-3 sm:grid-cols-2">
                 {ACTIONS.map((a) => {
                   const locked = billing?.can_generate?.[a.value] === false;
                   return (
@@ -1898,9 +1906,9 @@ export default function DashboardPage() {
               {action !== "generate_proposal" && (
                 <div>
                   <label htmlFor="uploaded_proposal" className="block text-sm font-medium text-slate-700">
-                    Approved research proposal <span className="text-red-600">*</span>
+                    {action === "improve_draft" ? "Your draft proposal" : "Approved research proposal"} <span className="text-red-600">*</span>
                   </label>
-                  <FileUpload value={uploadedProposal} onChange={setUploadedProposal} disabled={generating} label="Upload your proposal" />
+                  <FileUpload value={uploadedProposal} onChange={setUploadedProposal} disabled={generating} label={action === "improve_draft" ? "Upload your draft" : "Upload your proposal"} />
                   <textarea
                     id="uploaded_proposal"
                     rows={6}
@@ -1910,6 +1918,31 @@ export default function DashboardPage() {
                     placeholder="Paste the full text of your proposal, or upload it above."
                     className={fieldClass}
                   />
+                </div>
+              )}
+
+              {action === "improve_draft" && (
+                <div role="radiogroup" aria-label="What should we do with your draft?" className="grid gap-3 sm:grid-cols-2">
+                  {[
+                    ["review", "Review my draft", "A supervisor-style report: verdict, scorecard, section-by-section feedback, reference check, literature to add and a prioritised action plan. Your proposal is not rewritten."],
+                    ["complete", "Complete my draft", "Your own text is kept. Missing and thin sections are written to match it, and every new section is clearly marked so you can check and adapt it."],
+                  ].map(([value, title, text]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      role="radio"
+                      aria-checked={draftMode === value}
+                      disabled={generating}
+                      onClick={() => setDraftMode(value)}
+                      className={`rounded-xl border p-3 text-left transition ${
+                        draftMode === value ? "border-brand bg-mint ring-2 ring-[#BFE0D6]" : "border-slate-200 hover:border-slate-300"
+                      }`}
+                    >
+                      <span className="block text-sm font-semibold text-slate-900">{title}</span>
+                      <span className="mt-1 block text-xs text-slate-600">{text}</span>
+                    </button>
+                  ))}
+                  <p className="text-xs text-slate-500 sm:col-span-2">Uses one proposal credit at your level. Works best with a Word or PDF draft of at least two pages.</p>
                 </div>
               )}
 

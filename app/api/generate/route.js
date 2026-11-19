@@ -18,7 +18,8 @@ export const maxDuration = 60;
 const MAX_TEXT_INPUT_BYTES = 400 * 1024; // 400 KB
 const COOLDOWN_SECONDS = 30;
 
-const VALID_ACTIONS = ['generate_proposal', 'simulate_data', 'compile_dissertation'];
+const VALID_ACTIONS = ['generate_proposal', 'simulate_data', 'compile_dissertation', 'review_draft', 'complete_draft'];
+const DRAFT_ACTIONS = ['review_draft', 'complete_draft'];
 
 export async function POST(request) {
   // ---------- 1. Authenticate (getUser validates the token with Supabase Auth) ----------
@@ -99,7 +100,7 @@ export async function POST(request) {
     }
 
     if (
-      (action_type === 'simulate_data' || action_type === 'compile_dissertation') &&
+      (action_type === 'simulate_data' || action_type === 'compile_dissertation' || DRAFT_ACTIONS.includes(action_type)) &&
       !uploaded_proposal?.trim()
     ) {
       return NextResponse.json(
@@ -171,6 +172,14 @@ export async function POST(request) {
           );
         }
         previewMode = true;
+      }
+    } else if (DRAFT_ACTIONS.includes(action_type)) {
+      // Reviewing or completing a draft spends one proposal credit for the level; no free preview.
+      if (!paid) {
+        return NextResponse.json(
+          { error: 'PAYWALL_TRIGGERED', target: 'tier_1', level, message: 'Reviewing or completing a draft uses one proposal credit at your level.' },
+          { status: 403 }
+        );
       }
     } else if (action_type === 'simulate_data') {
       if (!paid) {
@@ -259,6 +268,14 @@ export async function POST(request) {
         }),
       },
     };
+
+    // Drafts: name the document after the draft when no topic is given.
+    if (DRAFT_ACTIONS.includes(action_type)) {
+      const firstLine = String(uploaded_proposal).split('\n').map((l) => l.replace(/^[#*\s]+/, '').trim()).find((l) => l.length > 3) || 'your draft';
+      const title = input.research_topic || clip(firstLine, 180);
+      input.research_topic = action_type === 'review_draft' ? `Review: ${title}` : title;
+      input.draft_title = title;
+    }
 
     // A project from the planning tools: its title, objectives and methodology go into the proposal.
     const projectId = /^[0-9a-f-]{36}$/i.test(String(body.project_id || '')) ? body.project_id : null;
