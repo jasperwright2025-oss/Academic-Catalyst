@@ -10,6 +10,7 @@ import { objectivesText } from "@/lib/tools/projectText";
 import { getWorks } from "@/lib/tools/openalex";
 import { limitRun } from "@/lib/tools/visibility";
 import { apaReference, inTextCitation } from "@/lib/tools/references";
+import { verifyTurnstile } from "@/lib/captcha";
 
 
 
@@ -26,6 +27,101 @@ async function signedInUser() {
     data: { user },
   } = await supabase.auth.getUser();
   return { supabase, user };
+}
+
+// ---------- One free Topic validator check without an account ----------
+// Approved by Simon on 18 Nov 2026. Guarded by the Turnstile check (a fresh token per check),
+// a 30-day httpOnly cookie (one check per browser) and a per-IP count (3 per 24 hours).
+// The per-IP count is kept in this server instance's memory, so it is a best-effort limit:
+// no new table and no paid service. The result is not saved (tool_runs.user_id is required).
+const ANON_COOKIE = "ac_anon_tv";
+const ANON_USED_MESSAGE = "You've used your free check. Create a free account to save it and run more.";
+const ANON_IP_LIMIT = 3;
+const ANON_IP_WINDOW_MS = 24 * 60 * 60 * 1000;
+const anonIpHits = new Map(); // ip -> [timestamps]
+
+function anonIpAllowed(ip) {
+  const now = Date.now();
+  if (anonIpHits.size > 5000) {
+    for (const [key, times] of anonIpHits) {
+      if (!times.some((t) => now - t < ANON_IP_WINDOW_MS)) anonIpHits.delete(key);
+    }
+  }
+  const recent = (anonIpHits.get(ip) || []).filter((t) => now - t < ANON_IP_WINDOW_MS);
+  anonIpHits.set(ip, recent);
+  return recent.length < ANON_IP_LIMIT;
+}
+
+function anonIpCount(ip) {
+  anonIpHits.set(ip, [...(anonIpHits.get(ip) || []), Date.now()]);
+}
+
+async function anonymousTopicCheck(request, startedAt) {
+  if (request.cookies.get(ANON_COOKIE)) {
+    return NextResponse.json({ error: "FREE_CHECK_USED", message: ANON_USED_MESSAGE }, { status: 429 });
+  }
+  const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+  if (!anonIpAllowed(ip)) {
+    return NextResponse.json({ error: "FREE_CHECK_USED", message: ANON_USED_MESSAGE }, { status: 429 });
+  }
+
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "BAD_REQUEST", message: "Invalid request." }, { status: 400 });
+  }
+  const input = {
+    topic: clip(body.topic, 600),
+    level: clip(body.level, 60),
+    institution: clip(body.institution, 200),
+    notes: clip(body.notes, 2000),
+  };
+  if (input.topic.length < 10) {
+    return NextResponse.json({ error: "BAD_REQUEST", message: "Please describe your topic in at least a few words." }, { status: 400 });
+  }
+
+  // The check costs an AI call, so it never runs without a passed Turnstile check.
+  const human = await verifyTurnstile(body.turnstile_token, ip);
+  if (!human.ok || human.skipped) {
+    return NextResponse.json(
+      { error: "CAPTCHA_FAILED", message: human.skipped ? "The free check is not available right now. Please create a free account." : human.message },
+      { status: 403 }
+    );
+  }
+  anonIpCount(ip);
+
+  let output;
+  try {
+    ({ output } = await runTool("topic_validator", input, { deadlineMs: startedAt + 270 * 1000 }));
+  } catch (err) {
+    if (isAiLimitError(err)) {
+      await alertAiLimit(createAdminClient(), err);
+      console.error("Tool run error: AI usage limit reached", "topic_validator (anonymous)");
+      return NextResponse.json({ error: "AI_PAUSED", message: AI_PAUSED_MESSAGE.replace("You have not been charged", "Nothing was counted") }, { status: 503 });
+    }
+    if (err instanceof WebSearchUnavailableError) {
+      return NextResponse.json(
+        { error: "SEARCH_UNAVAILABLE", message: "The study search is unavailable right now. Nothing was counted. Please try again shortly." },
+        { status: 503 }
+      );
+    }
+    console.error("Tool run error:", "topic_validator (anonymous)", err?.status, err?.message);
+    return NextResponse.json(
+      {
+        error: err instanceof ToolOutputError ? "NO_RESULT" : "SERVER_FAULT",
+        message: "The tool could not finish this time. Nothing was counted. Please try again.",
+      },
+      { status: 502 }
+    );
+  }
+
+  const res = NextResponse.json({
+    run: limitRun({ tool: "topic_validator", input, output, created_at: new Date().toISOString() }, false),
+    anonymous: true,
+  });
+  res.cookies.set(ANON_COOKIE, "1", { httpOnly: true, secure: true, sameSite: "lax", path: "/", maxAge: 60 * 60 * 24 * 30 });
+  return res;
 }
 
 function toolFrom(params) {
@@ -65,7 +161,10 @@ export async function POST(request, { params }) {
   if (!tool) return NextResponse.json({ error: "NOT_FOUND", message: "This tool is not available yet." }, { status: 404 });
 
   const { supabase, user } = await signedInUser();
-  if (!user) return NextResponse.json({ error: "UNAUTHORIZED", message: "Unauthorized. Login required." }, { status: 401 });
+  if (!user) {
+    if (tool === "topic_validator") return anonymousTopicCheck(request, startedAt);
+    return NextResponse.json({ error: "UNAUTHORIZED", message: "Unauthorized. Login required." }, { status: 401 });
+  }
 
   let body;
   try {

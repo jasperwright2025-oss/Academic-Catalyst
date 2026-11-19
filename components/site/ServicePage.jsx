@@ -2,11 +2,14 @@ import Link from "next/link";
 import SiteHeader from "./SiteHeader";
 import SiteFooter from "./SiteFooter";
 import { SITE, serviceBySlug, serviceHref } from "@/lib/site/content";
+import FreeTopicCheck from "@/components/app/FreeTopicCheck";
 
 export default function ServicePage({ service: s }) {
   const next = s.next ? serviceBySlug(s.next) : null;
   const live = s.status === "live";
   const crumb = s.group === "tools" ? "Tools" : "Services";
+  // The Topic validator offers one free check without an account (decision of 18 Nov 2026).
+  const freeCheck = live && s.slug === "topic-validator";
 
   return (
     <div className="min-h-screen bg-paper font-sans text-ink">
@@ -22,12 +25,19 @@ export default function ServicePage({ service: s }) {
             </p>
             <h1 className="mt-3 font-serif text-5xl font-medium leading-[1.06] tracking-tight sm:text-[56px]">{s.headline}</h1>
             <p className="mt-6 max-w-xl text-lg leading-relaxed text-ink-soft">{s.intro}</p>
+            {freeCheck ? (
+              <div className="mt-8">
+                <FreeTopicCheck />
+                <p className="mt-3 text-sm font-semibold text-ink-soft">{s.price}</p>
+              </div>
+            ) : (
             <div className="mt-8 flex flex-wrap items-center gap-4">
               <Link href={live ? "/register" : "/register?interest=" + s.slug} className="rounded-full bg-brand px-6 py-4 font-semibold text-white transition hover:bg-brand-dark">
                 {live ? (s.group === "tools" ? `Try the ${s.name} free` : "Start free") : "Create a free account"}
               </Link>
               <span className="text-sm font-semibold text-ink-soft">{s.price}</span>
             </div>
+            )}
             {!live && (
               <p className="mt-4 inline-block rounded-xl bg-sand px-4 py-2.5 text-sm text-[#7A4A0C]">
                 Opening soon. Create a free account now and it will be waiting in your dashboard.
