@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Logo from "@/components/site/Logo";
-import { logout } from "@/lib/api/client";
+import { logout, getBillingStatus } from "@/lib/api/client";
 
 const NAV = [
   { href: "/dashboard", label: "Home", icon: "M3 11l9-8 9 8M5 10v10h14V10" },
@@ -21,6 +21,23 @@ export default function DashboardShell({ children }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  // Admins (ADMIN_EMAILS) get an "Approve payments" link in the menu.
+  useEffect(() => {
+    let cancelled = false;
+    getBillingStatus()
+      .then((b) => {
+        if (!cancelled) setIsAdmin(Boolean(b?.is_admin));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  const navItems = isAdmin
+    ? [...NAV, { href: "/admin/payments", label: "Approve payments", icon: "M9 12l2 2 4-4M12 21a9 9 0 100-18 9 9 0 000 18z" }]
+    : NAV;
 
   async function signOut() {
     setSigningOut(true);
@@ -41,7 +58,7 @@ export default function DashboardShell({ children }) {
 
   const menu = (
     <nav aria-label="Dashboard" className="flex flex-col gap-1">
-      {NAV.map((item) => {
+      {navItems.map((item) => {
         const active = isActive(item.href);
         return (
           <Link

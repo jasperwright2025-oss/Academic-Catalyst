@@ -1843,6 +1843,16 @@ export default function DashboardPage() {
                 })}
               </div>
 
+              {action === "generate_proposal" && (
+                <p className="rounded-lg bg-[#FFF6E8] px-3 py-2 text-xs text-slate-700">
+                  Already started your proposal?{" "}
+                  <button type="button" onClick={() => setAction("improve_draft")} className="font-semibold text-brand underline">
+                    Choose &ldquo;Review or complete my draft&rdquo;
+                  </button>{" "}
+                  and upload it, so your own work is kept. This card writes a new proposal from your topic.
+                </p>
+              )}
+
               <div>
                 <span id="level-label" className="block text-sm font-medium text-slate-700">Academic level</span>
                 <div role="radiogroup" aria-labelledby="level-label" className="mt-1 grid gap-2 sm:grid-cols-3">
