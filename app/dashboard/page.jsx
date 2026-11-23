@@ -5,6 +5,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { getBillingStatus, getActiveJob, listDocuments, waitForJob, isUnauthorized } from "@/lib/api/client";
 import { TOOLS } from "@/lib/site/content";
+import InviteRedeem from "@/components/app/InviteRedeem";
+
+// Invite codes issued in Nov 2026 expire at the end of 5 Dec (EAT).
+const INVITES_OPEN_UNTIL = new Date("2026-12-05T21:00:00Z");
 
 const TYPE_LABELS = { proposal: "Research proposal", field_data: "Practice data pack", dissertation: "Dissertation draft report" };
 
@@ -116,6 +120,12 @@ export default function DashboardHome() {
       </div>
 
       {error && <p role="alert" className="mt-6 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
+
+      {Date.now() < INVITES_OPEN_UNTIL.getTime() && (
+        <div className="mt-6 max-w-xl">
+          <InviteRedeem onRedeemed={() => setTimeout(() => window.location.reload(), 1500)} />
+        </div>
+      )}
 
       {/* Credits */}
       <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

@@ -102,7 +102,11 @@ export default function RegisterPage() {
     } catch (err) {
       // The security check works only once, so bring it back for the next attempt.
       setCaptchaReset((n) => n + 1);
-      setError(err.message || "We could not create your account. Please try again.");
+      if (inviteCode && err?.code === "EMAIL_IN_USE") {
+        setError(`You already have an account. Sign in, then enter your code ${inviteCode} in the "Have an invite code?" box on your Home page.`);
+      } else {
+        setError(err.message || "We could not create your account. Please try again.");
+      }
       setSubmitting(false);
       return;
     }
