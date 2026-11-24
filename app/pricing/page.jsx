@@ -16,7 +16,7 @@ export const metadata = {
 };
 
 const QUESTIONS = [
-  ["What is free?", "Every account gets one free preview of a full research proposal. The four tools will each allow three free uses a month when they open."],
+  ["What is free?", "Every account gets one free proposal preview: the introduction and objectives in full, with the rest unlocked by a single purchase or a plan. The four tools each allow three free uses a month, and you can run one Topic validator check without an account."],
   ["How do I pay?", "By MTN or Airtel mobile money, or by USDT. Your credits appear once the payment is confirmed."],
   ["What does a single purchase include?", "One complete document of that type at your academic level, unlocked in full with a formatted Word download."],
   ["Why do prices differ by level?", "An undergraduate proposal is shorter and needs fewer sources than a master's or PhD proposal, so it costs less to prepare. A credit for a higher level also covers a lower one."],

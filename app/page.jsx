@@ -160,7 +160,7 @@ export default function HomePage() {
           <div className="flex flex-wrap items-center justify-between gap-6 rounded-3xl bg-mint px-8 py-14 sm:px-10">
             <div className="min-w-0 flex-[1_1_420px]">
               <h2 className="font-serif text-4xl font-medium tracking-tight">See your proposal before you pay.</h2>
-              <p className="mt-3 text-[17px] text-[#2D3B52]">Every new account gets a free preview of a full research proposal.</p>
+              <p className="mt-3 text-[17px] text-[#2D3B52]">Every new account gets one free proposal preview: the introduction and objectives in full.</p>
             </div>
             <Link href="/register" className="rounded-full bg-ink px-7 py-4 text-base font-semibold text-white hover:bg-[#1c3156]">
               Create a free account
